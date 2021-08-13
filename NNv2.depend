@@ -1,0 +1,10 @@
+# depslib dependency file v1.0
+1628867072 source:c:\users\lmm\desktop\probleme_info\nnv2\main.cpp
+	<iostream>
+	<fstream>
+	<vector>
+	<cmath>
+	<random>
+	<ctime>
+	<cassert>
+
