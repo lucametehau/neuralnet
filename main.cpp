@@ -206,7 +206,7 @@ namespace training {
   const int inputSize = 36;
   const int outputSize = 1;
 
-  /// given a 7 by 7 matrix
+  /// given a 6 by 6 matrix
   /// it returns if there is a path
   /// from the first to the last column
   /// through a 1
@@ -332,17 +332,9 @@ void test() {
   topology.push_back(6);
   topology.push_back(1);
 
-  Network NN(topology), NN2(topology);
+  Network NN(topology);
 
-  /// 0.90034 0.00163233 0.00353823 0.00444064 0.786639 0.752504 0.414985 0.290204 0.97584 0.248327 0.659422 0.613187
-
-  //NN2.save("mazesolver.nn");
   NN.load("mazesolver.nn");
-
-  //return;
-
-  for(auto &l : NN.layers)
-    cout << l.size << "\n";
 
   double split = 0.1;
   int trainSize = dataSize * split;
