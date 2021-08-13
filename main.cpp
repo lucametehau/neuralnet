@@ -5,14 +5,16 @@
 #include <random>
 #include <ctime>
 #include <cassert>
+#include <queue>
 #pragma GCC optimize("Ofast")
 
 using namespace std;
 
-mt19937_64 gen(time(0));
-uniform_real_distribution <double> rng(0, 1);
-
 namespace tools {
+  mt19937_64 gen(time(0));
+  uniform_real_distribution <double> rng(0, 1);
+  uniform_int_distribution <int> bin(0, 1);
+
   vector <double> createRandomArray(int length) {
     vector <double> v;
 
@@ -34,8 +36,10 @@ public:
     weights.resize(numNeurons);
 
     if(prevNumNeurons) {
-      for(int i = 0; i < numNeurons; i++)
+      for(int i = 0; i < numNeurons; i++) {
+        weights[i].resize(prevNumNeurons);
         weights[i] = tools::createRandomArray(prevNumNeurons);
+      }
     }
   }
 
@@ -48,9 +52,6 @@ class Network {
 public:
 
   Network(vector <int> &topology) {
-
-    netSize = (int)topology.size();
-
     for(int i = 0; i < (int)topology.size(); i++) {
       layers.push_back(Layer(topology[i], (i > 0 ? topology[i - 1] : 0)));
     }
@@ -65,9 +66,12 @@ public:
   }
 
   vector <double> calc(vector <double> &input) { /// feed forward
+    //cout << layers.size() << " " << layers[0].size << " " << input.size() << "\n";
     layers[0].output = input;
 
-    for(int l = 1; l < netSize; l++) {
+    //cout << "a\n";
+
+    for(int l = 1; l < (int)layers.size(); l++) {
       for(int n = 0; n < layers[l].size; n++) {
         double sum = layers[l].bias[n];
 
@@ -80,6 +84,8 @@ public:
       }
     }
 
+    //cout << "a\n";
+
     return layers.back().output;
   }
 
@@ -90,7 +96,7 @@ public:
     }
 
     /// for hidden layers
-    for(int l = netSize - 2; l > 0; l--) {
+    for(int l = (int)layers.size() - 2; l > 0; l--) {
       for(int n = 0; n < layers[l].size; n++) {
         double sum = 0;
         for(int nextN = 0; nextN < layers[l + 1].size; nextN++)
@@ -102,7 +108,7 @@ public:
   }
 
   void updateWeights(double LR) {
-    for(int l = 1; l < netSize; l++) {
+    for(int l = 1; l < (int)layers.size(); l++) {
       for(int n = 0; n < layers[l].size; n++) {
         for(int prevN = 0; prevN < layers[l - 1].size; prevN++) {
           double delta = -LR * layers[l - 1].output[prevN] * layers[l].error[n];
@@ -134,50 +140,171 @@ public:
     updateWeights(LR);
   }
 
-  int netSize;
+  void write(vector <double> &v, ofstream &out) {
+    for(auto &i : v)
+      out << i << " ";
+    out << "\n";
+  }
+
+  vector <double> read(int lg, ifstream &in) {
+    vector <double> v;
+    double x;
+    for(int i = 0; i < lg; i++)
+      in >> x, v.push_back(x);
+    return v;
+  }
+
+  void save(string path) {
+    ofstream out (path);
+    int cnt = layers.size();
+
+    vector <double> v;
+
+    out << cnt << "\n";
+
+    for(int i = 0; i < (int)layers.size(); i++) {
+      write(layers[i].bias, out);
+      write(layers[i].output, out);
+      write(layers[i].outputDerivative, out);
+      write(layers[i].error, out);
+
+      for(int j = 0; j < layers[i].size && i; j++) {
+        write(layers[i].weights[j], out);
+      }
+    }
+  }
+
+  void load(string path) {
+    ifstream in (path);
+    int cnt = layers.size(), cnt2 = 0;
+
+    in >> cnt2;
+
+    if(cnt2 != cnt) {
+      cout << "Can't load network!\n";
+      cout << "Expected " << cnt << ", got " << cnt2 << "\n";
+      assert(0);
+    }
+
+    for(int i = 0; i < (int)layers.size(); i++) {
+      layers[i].bias = read(layers[i].size, in);
+      layers[i].output = read(layers[i].size, in);
+      layers[i].outputDerivative = read(layers[i].size, in);
+      layers[i].error = read(layers[i].size, in);
+
+      for(int j = 0; j < layers[i].size && i; j++) {
+        layers[i].weights[j] = read(layers[i - 1].size, in);
+      }
+    }
+  }
+
   vector <Layer> layers;
 };
 
-/// use this to adjust training data size
-
-namespace Training {
-  const int inputSize = 10;
+namespace training {
+  /// change these values to adjust training data size
+  const int inputSize = 36;
   const int outputSize = 1;
+
+  /// given a 7 by 7 matrix
+  /// it returns if there is a path
+  /// from the first to the last column
+  /// through a 1
+  bool solve(vector <int> &v) {
+    bool mat[8][8], seen[8][8];
+    static int dx[] = {-1, 0, 1, 0};
+    static int dy[] = {0, 1, 0, -1};
+
+    for(int i = 0; i < 36; i++)
+      mat[i / 6][i % 6] = v[i];
+
+    for(int i = 0; i < 6; i++) {
+      for(int j = 0; j < 6; j++)
+        seen[i][j] = 0;
+    }
+
+    queue <pair <int, int>> q;
+
+    for(int i = 0; i < 6; i++) {
+      if(!mat[i][0]) {
+        q.push({i, 0});
+        seen[i][0] = 1;
+      }
+    }
+
+    while(!q.empty()) {
+      pair <int, int> p = q.front();
+      q.pop();
+
+      for(int i = 0; i < 4; i++) {
+        int x = p.first + dx[i], y = p.second + dy[i];
+
+        if(0 <= x && x < 6 && 0 <= y && y < 6 && !seen[x][y] && !mat[x][y]) {
+          q.push({x, y});
+          seen[x][y] = 1;
+        }
+      }
+    }
+
+    bool path = 0;
+
+    for(int i = 0; i < 6; i++)
+      path |= seen[i][5];
+
+    return path;
+  }
 
   void createDataset(int size, string path) {
     ofstream out (path);
 
-    for(int i = 0; i < size; i++) {
-      vector <double> inp, outp;
-      int cnt[2], x;
-      cnt[0] = cnt[1] = 0;
+    cout << "Creating data...\n";
 
+    int correct = 0;
+
+    for(int i = 0; i < size; i++) {
+      if(i % (size / 100) == 0)
+        cout << "Index " << i << " / " << size << "\n";
+
+      vector <int> inp, outp;
+      int x;
       for(int j = 0; j < inputSize; j++) {
-        x = rand() % 2;
+        x = tools::bin(tools::gen);
         inp.push_back(x);
         out << x << " ";
-        cnt[x]++;
       }
-      x = (cnt[1] > cnt[0]);
+
+      x = solve(inp);
       outp.push_back(x);
       out << x << " ";
+
+      if(x)
+        correct++;
+
       out << "\n";
     }
+
+    cout << correct << " out of " << size << "\n";
   }
 
   void readDataset(vector <vector <double>> &input, vector <vector <double>> &output, int size, string path) {
-    ifstream in (path);
+    freopen(path.c_str(), "r", stdin);
     double x;
 
+    cout << "Loading data...\n";
+
     for(int i = 0; i < size; i++) {
+      if(i % (size / 100) == 0)
+        cout << "Index " << i << " / " << size << "\n";
+
       vector <double> inp, outp;
+
       for(int j = 0; j < inputSize; j++) {
-        in >> x;
+        scanf("%lf", &x);
         inp.push_back(x);
       }
 
       for(int j = 0; j < outputSize; j++) {
-        in >> x;
+        scanf("%lf", &x);
         outp.push_back(x);
       }
 
@@ -188,29 +315,40 @@ namespace Training {
 }
 
 void test() {
-  bool create = false;
-  int dataSize = 100000;
-  int epochs = 1000;
+  bool create = false; /// change this to true if you want a fresh new dataset
+  int dataSize = 1000000;
+  int epochs = 100000;
   double LR = 0.1;
 
   if(create) {
-    Training::createDataset(dataSize, "training.txt");
+    training::createDataset(dataSize, "training.txt");
     return;
   }
 
   vector <int> topology;
 
-  topology.push_back(10);
-  topology.push_back(5);
+  topology.push_back(36);
+  topology.push_back(12);
+  topology.push_back(6);
   topology.push_back(1);
 
-  Network NN(topology);
+  Network NN(topology), NN2(topology);
+
+  /// 0.90034 0.00163233 0.00353823 0.00444064 0.786639 0.752504 0.414985 0.290204 0.97584 0.248327 0.659422 0.613187
+
+  //NN2.save("mazesolver.nn");
+  NN.load("mazesolver.nn");
+
+  //return;
+
+  for(auto &l : NN.layers)
+    cout << l.size << "\n";
 
   double split = 0.1;
   int trainSize = dataSize * split;
   vector <vector <double>> input, output;
 
-  Training::readDataset(input, output, dataSize, "training.txt");
+  training::readDataset(input, output, dataSize, "training.txt");
 
   for(int epoch = 1; epoch <= epochs; epoch++) {
     cout << "----------------------------------------- Epoch " << epoch << "/" << epochs << " -----------------------------------------\n";
@@ -227,10 +365,9 @@ void test() {
       error += delta * delta;
     }
 
-    if(epoch % 50 == 0)
-      LR /= 2;
-
     cout << "Total error: " << error / (2 * (dataSize - trainSize)) << "\n";
+
+    NN.save("mazesolver.nn");
   }
 
   /*for(int i = trainSize; i < dataSize; i++) {
