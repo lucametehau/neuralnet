@@ -10,7 +10,7 @@ using namespace std;
 const int SIGMOID    = 1;
 const int RELU       = 2;
 const int LEAKY_RELU = 3;
-const int ACTIVATION = LEAKY_RELU;
+const int ACTIVATION = SIGMOID;
 
 namespace tools {
   mt19937_64 gen(time(0));
@@ -214,3 +214,40 @@ public:
 
   vector <Layer> layers;
 };
+
+void runTraining(vector <int> &topology, vector <vector <double>> &input, vector <vector <double>> &ouput,
+                 int dataSize, int epochs, double LR, double split, string path, string savePath) {
+
+  int trainSize = dataSize * (1.0 - split);
+
+  Network NN(topology);
+
+  for(int epoch = 1; epoch <= epochs; epoch++) {
+    cout << "----------------------------------------- Epoch " << epoch << "/" << epochs << " -----------------------------------------\n";
+
+    double tStart = clock();
+
+    for(int i = 0; i < trainSize; i++) {
+      NN.train(input[i], output[i], LR);
+    }
+
+    double error = 0;
+
+    for(int i = trainSize; i < dataSize; i++) {
+      vector <double> ans = NN.calc(input[i]);
+
+      double delta = (ans[0] - output[i][0]);
+      error += delta * delta;
+    }
+
+    double tEnd = clock();
+
+    cout << "Raw error : " << error << "\n";
+
+    cout << "Error     : " << error / (2 * (dataSize - trainSize)) << "\n";
+
+    cout << "Time taken: " << (tEnd - tStart) / CLOCKS_PER_SEC << " s\n";
+
+    //NN.save(savePath);
+  }
+}
