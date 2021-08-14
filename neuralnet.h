@@ -215,12 +215,20 @@ public:
   vector <Layer> layers;
 };
 
-void runTraining(vector <int> &topology, vector <vector <double>> &input, vector <vector <double>> &ouput,
-                 int dataSize, int epochs, double LR, double split, string path, string savePath) {
+/// runs training on given input, output, dataSize, epochs, LR
+/// splits data into training and testing according to split
+/// saves NN to "savePath"
+/// can load NN from "savePath"
+
+void runTraining(vector <int> &topology, vector <vector <double>> &input, vector <vector <double>> &output,
+                 int dataSize, int epochs, double LR, double split, string savePath, bool load) {
 
   int trainSize = dataSize * (1.0 - split);
 
   Network NN(topology);
+
+  if(load)
+    NN.load(savePath);
 
   for(int epoch = 1; epoch <= epochs; epoch++) {
     cout << "----------------------------------------- Epoch " << epoch << "/" << epochs << " -----------------------------------------\n";
@@ -248,6 +256,6 @@ void runTraining(vector <int> &topology, vector <vector <double>> &input, vector
 
     cout << "Time taken: " << (tEnd - tStart) / CLOCKS_PER_SEC << " s\n";
 
-    //NN.save(savePath);
+    NN.save(savePath);
   }
 }

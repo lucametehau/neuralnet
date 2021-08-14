@@ -127,20 +127,19 @@ void mazeSolver() {
   topology.push_back(1);
 
   bool create = false; /// change this to true if you want a fresh new dataset
-  //int dataSize = 1000000;
-  //int epochs = 100000;
-  //double LR = 0.01;
-  //double split = 0.1;
-  int trainSize = dataSize * (1.0 - split);
+  int dataSize = 1000000;
+  int epochs = 10000;
+  double LR = 0.1;
+  double split = 0.1;
 
   if(create) {
-    training::createDataset(dataSize, path);
+    training::createDataset(dataSize, "training.txt");
     return;
   }
 
   vector <vector <double>> input, output;
 
-  training::readDataset(input, output, dataSize, path);
+  training::readDataset(input, output, dataSize, "training.txt");
 
-  runTraining(topology, input, output, 1000000, 10000, 0.1, 0.1, "training.txt", "mazesolver.nn");
+  runTraining(topology, input, output, dataSize, epochs, LR, split, "mazesolver.nn", true);
 }

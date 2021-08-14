@@ -6,7 +6,6 @@
 #include <ctime>
 #include <cassert>
 #include <queue>
-#include "neuralnet.h"
 #include "mazesolver.h"
 #pragma GCC optimize("Ofast")
 
