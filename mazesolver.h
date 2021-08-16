@@ -120,11 +120,11 @@ namespace training {
 }
 
 void mazeSolver() {
-  vector <int> topology;
-  topology.push_back(36);
-  topology.push_back(12);
-  topology.push_back(6);
-  topology.push_back(1);
+  vector <LayerInfo> topology;
+  topology.push_back({36, NONE});
+  topology.push_back({12, SIGMOID});
+  topology.push_back({6, SIGMOID});
+  topology.push_back({1, SIGMOID});
 
   bool create = false; /// change this to true if you want a fresh new dataset
   int dataSize = 1000000;
@@ -141,5 +141,5 @@ void mazeSolver() {
 
   training::readDataset(input, output, dataSize, "training.txt");
 
-  runTraining(topology, input, output, dataSize, epochs, LR, split, "mazesolver.nn", true);
+  runTraining(topology, input, output, dataSize, 1, epochs, LR, split, "mazesolver.nn", true);
 }
