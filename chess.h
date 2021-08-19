@@ -40,8 +40,8 @@ namespace chessTraining {
     return 6 * color + val;
   }
 
-  vector <double> fenToInput(char fen[]) {
-    vector <double> input;
+  NetInput fenToInput(char fen[]) {
+    NetInput ans;
     uint64_t bb[12];
     int ind = 0;
     int lg = strlen(fen);
@@ -70,25 +70,27 @@ namespace chessTraining {
 
     for(int j = 0; j < 12; j++) {
       for(int k = 0; k < 64; k++) {
-        input.push_back((bb[j] >> k) & 1);
+        if((bb[j] >> k) & 1) {
+          ans.ind.push_back(64 * j + k);
+        }
       }
     }
 
-    return input;
+    return ans;
   }
 
-  void readDataset(vector <vector <double>> &input, vector <vector <double>> &output, int dataSize, string path) {
+  void readDataset(vector <NetInput> &input, vector <vector <float>> &output, int dataSize, string path) {
     freopen(path.c_str(), "r", stdin);
 
-    double y;
+    float y;
 
     char fen[105], a[15], c;
+    NetInput inp;
+    vector <float> outp;
 
     cout << "Loading data...\n";
 
     for(int id = 0; id < dataSize; id++) {
-      vector <double> inp;
-      vector <double> outp;
 
       if(dataSize > 1000 && id % (dataSize / 1000) == 0) {
         cout << "Index " << id << "/" << dataSize << "\n";
@@ -107,9 +109,10 @@ namespace chessTraining {
 
       scanf("%c", &c);
       scanf("%c", &c);
-      scanf("%lf", &y);
+      scanf("%f", &y);
       scanf("%c", &c);
 
+      outp.clear();
       outp.push_back(y);
 
       input.push_back(inp);
@@ -126,14 +129,15 @@ void chessNN() {
   topology.push_back({256, RELU});
   topology.push_back({1, SIGMOID});
 
-  vector <vector <double>> input, output;
+  vector <NetInput> input;
+  vector <vector <float>> output;
 
-  int dataSize = 1000000, batchSize = 128;
+  int dataSize = 7100000, batchSize = 2500;
   int epochs = 10000;
-  double LR = 1;
+  double LR = 1e-1;
   double split = 0.1;
 
   chessTraining::readDataset(input, output, dataSize, "D:\\Downloads\\lichess-big3-resolved\\lichess-big3-resolved.book");
 
-  runTraining(topology, input, output, dataSize, batchSize, epochs, LR, split, "chess.nn", false);
+  runTraining(topology, input, output, dataSize, batchSize, epochs, LR, split, "temp.nn", false);
 }

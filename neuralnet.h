@@ -16,23 +16,27 @@ const int LEAKY_RELU = 3;
 
 namespace tools {
   mt19937_64 gen(time(0));
-  uniform_real_distribution <double> rng(0, 1);
+  uniform_real_distribution <float> rng(0, 1);
   uniform_int_distribution <int> bin(0, 1);
 
-  vector <double> createRandomArray(int length) {
-    vector <double> v;
+  vector <float> createRandomArray(int length) {
+    vector <float> v;
+    float k = sqrtf(2.0 / length);
 
     for(int i = 0; i < length; i++)
-      v.push_back(rng(gen));
+      v.push_back(rng(gen) * k);
 
     return v;
   }
 }
 
-class LayerInfo {
-public:
+struct LayerInfo {
   int size;
   int activationType;
+};
+
+struct NetInput {
+  vector <short> ind;
 };
 
 class Layer {
@@ -57,8 +61,8 @@ public:
   }
 
   LayerInfo info;
-  vector <double> bias, output, error, outputDerivative;
-  vector <vector <double>> weights;
+  vector <float> bias, output, error, outputDerivative;
+  vector <vector <float>> weights;
 };
 
 class Network {
@@ -92,35 +96,47 @@ public:
     return (type == RELU ? 0 : 0.05);
   }
 
-  vector <double> calc(vector <double> &input) { /// feed forward
-    //cout << layers.size() << " " << layers[0].size << " " << input.size() << "\n";
-    layers[0].output = input;
+  vector <float> calc(NetInput &input) { /// feed forward
+    for(int i = 0; i < layers[0].info.size; i++)
+      layers[0].output[i] = 0;
 
-    //cout << "a\n";
+    for(auto &i : input.ind)
+      layers[0].output[i] = 1;
+    float sum;
 
-    for(int l = 1; l < (int)layers.size(); l++) {
+    for(int n = 0; n < layers[1].info.size; n++) {
+      sum = layers[1].bias[n];
+
+      /// when feeding forward to first layer
+      /// we don't have to go through the input
+      /// values that are 0 (which is the output
+      /// of the input layer)
+
+      for(auto &prevN : input.ind) {
+        sum += layers[0].output[prevN] * layers[1].weights[n][prevN];
+      }
+
+      layers[1].output[n] = activationFunction(sum, layers[1].info.activationType);
+      layers[1].outputDerivative[n] = activationFunctionDerivative(sum, layers[1].info.activationType);
+    }
+
+    for(int l = 2; l < (int)layers.size(); l++) {
       for(int n = 0; n < layers[l].info.size; n++) {
-        double sum = layers[l].bias[n];
+        sum = layers[l].bias[n];
 
         for(int prevN = 0; prevN < layers[l - 1].info.size; prevN++) {
           sum += layers[l - 1].output[prevN] * layers[l].weights[n][prevN];
         }
 
-        //cout << l << " " << n << " " << layers[l].bias[n] << " " << sum << "\n";
-
         layers[l].output[n] = activationFunction(sum, layers[l].info.activationType);
         layers[l].outputDerivative[n] = activationFunctionDerivative(sum, layers[l].info.activationType);
       }
-
-      //cout << "---------------------------\n";
     }
-
-    //cout << "a\n";
 
     return layers.back().output;
   }
 
-  void backProp(vector <double> &target) {
+  void backProp(vector <float> &target) {
     /// for output neurons
     for(int n = 0; n < layers.back().info.size; n++) {
       layers.back().error[n] = (layers.back().output[n] - target[n]) * layers.back().outputDerivative[n];
@@ -129,7 +145,7 @@ public:
     /// for hidden layers
     for(int l = (int)layers.size() - 2; l > 0; l--) {
       for(int n = 0; n < layers[l].info.size; n++) {
-        double sum = 0;
+        float sum = 0;
         for(int nextN = 0; nextN < layers[l + 1].info.size; nextN++)
           sum += layers[l + 1].weights[nextN][n] * layers[l + 1].error[nextN];
 
@@ -141,73 +157,55 @@ public:
   void updateWeights(double LR) {
     for(int l = 1; l < (int)layers.size(); l++) {
       for(int n = 0; n < layers[l].info.size; n++) {
-        for(int prevN = 0; prevN < layers[l - 1].info.size; prevN++) {
-          double delta = -LR * layers[l - 1].output[prevN] * layers[l].error[n];
-          layers[l].weights[n][prevN] += delta;
-        }
+        float delta = -LR * layers[l].error[n];
 
-        /// update bias
-        /// no more layers[l - 1].output[prevN], because bias isn't connected to previous neurons
-        double delta = -LR * layers[l].error[n];
+        for(int prevN = 0; prevN < layers[l - 1].info.size; prevN++) {
+          layers[l].weights[n][prevN] += delta * layers[l - 1].output[prevN];
+        }
 
         layers[l].bias[n] += delta;
       }
     }
   }
 
-  void train(vector <double> &input, vector <double> &target, double LR) {
-    if((int)input.size() != layers[0].info.size) {
-      cout << "Wrong input size!\n";
-      assert(0);
-    }
-
-    if((int)target.size() != layers.back().info.size) {
-      cout << "Wrong output size!\n";
-      assert(0);
-    }
-
+  void train(NetInput &input, vector <float> &target, double LR) {
     calc(input);
     backProp(target);
     updateWeights(LR);
   }
 
-  double calcError(vector <vector <double>> &input, vector <vector <double>> &output, int trainSize, int dataSize) {
+  double calcError(vector <NetInput> &input, vector <vector <float>> &output, int trainSize, int dataSize) {
     double error = 0;
 
     double tStart = clock();
 
     for(int i = trainSize; i < dataSize; i++) {
-      vector <double> ans = calc(input[i]);
+      vector <float> ans = calc(input[i]);
 
       double delta = (ans[0] - output[i][0]);
       error += delta * delta;
-
-      if(i % 1000 == 0) {
-        cout << "index " << i << "\n";
-        cout << ans[0] << " " << output[i][0] << "\n\n";
-      }
     }
 
     double tEnd = clock();
 
     cout << "Raw error : " << error << "\n";
 
-    cout << "Error     : " << error / (2 * (dataSize - trainSize)) << "\n";
+    cout << "Error     : " << error / (dataSize - trainSize) << "\n";
 
     cout << "Time taken: " << (tEnd - tStart) / CLOCKS_PER_SEC << " s\n";
 
     return error;
   }
 
-  void write(vector <double> &v, ofstream &out) {
+  void write(vector <float> &v, ofstream &out) {
     for(auto &i : v)
       out << i << " ";
     out << "\n";
   }
 
-  vector <double> read(int lg, ifstream &in) {
-    vector <double> v;
-    double x;
+  vector <float> read(int lg, ifstream &in) {
+    vector <float> v;
+    float x;
     for(int i = 0; i < lg; i++)
       in >> x, v.push_back(x);
     return v;
@@ -216,8 +214,6 @@ public:
   void save(string path) {
     ofstream out (path);
     int cnt = layers.size();
-
-    vector <double> v;
 
     out << cnt << "\n";
 
@@ -266,7 +262,7 @@ public:
 /// saves NN to "savePath"
 /// can load NN from "savePath"
 
-void runTraining(vector <LayerInfo> &topology, vector <vector <double>> &input, vector <vector <double>> &output,
+void runTraining(vector <LayerInfo> &topology, vector <NetInput> &input, vector <vector <float>> &output,
                  int dataSize, int batchSize, int epochs, double LR, double split, string savePath, bool load) {
 
   int trainSize = dataSize * (1.0 - split);
@@ -282,37 +278,22 @@ void runTraining(vector <LayerInfo> &topology, vector <vector <double>> &input, 
     //return;
   }
 
-  /*for(int i = 0; i < 100000; i++) {
-    NN.train(input[0], output[0], LR);
-    NN.train(input[2], output[2], LR);
-
-    vector <double> ans = NN.calc(input[0]);
-
-    cout << i << " : " << ans[0] << " " << output[0][0] << ", ";
-
-    ans = NN.calc(input[2]);
-
-    cout << ans[0] << " " << output[2][0] << "\n";
-  }
-
-  return;*/
-
   for(int epoch = 1; epoch <= epochs; epoch++) {
     cout << "----------------------------------------- Epoch " << epoch << "/" << epochs << " -----------------------------------------\n";
 
     double tStart = clock();
 
     for(int i = 0; i < trainSize; i++) {
-      /*NN.calc(input[i]);
-      NN.backProp(output[i]);*/
-      NN.train(input[i], output[i], LR);
+      NN.calc(input[i]);
+      NN.backProp(output[i]);
+      //NN.train(input[i], output[i], LR);
 
-      /*if(i % batchSize == 0 || i == trainSize - 1) {
+      if(i % batchSize == 0 || i == trainSize - 1) {
         NN.updateWeights(LR);
-        cout << "Training index " << i << " / " << trainSize << "\n";
+        //cout << "Training index " << i << " / " << trainSize << "\n";
 
         //NN.calcError(input, output, trainSize, dataSize);
-      }*/
+      }
     }
 
     double tEnd = clock();

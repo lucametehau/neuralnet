@@ -6,7 +6,6 @@
 #include <ctime>
 #include <cassert>
 #include <queue>
-#include "mazesolver.h"
 #include "chess.h"
 //#pragma GCC optimize("Ofast")
 
