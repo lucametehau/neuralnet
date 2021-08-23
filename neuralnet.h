@@ -333,21 +333,7 @@ public:
     out << "\n";
   }
 
-  void writeD(vector <double> &v, ofstream &out) {
-    for(auto &i : v)
-      out << i << " ";
-    out << "\n";
-  }
-
   vector <double> read(int lg, ifstream &in) {
-    vector <double> v;
-    double x;
-    for(int i = 0; i < lg; i++)
-      in >> x, v.push_back(x);
-    return v;
-  }
-
-  vector <double> readD(int lg, ifstream &in) {
     vector <double> v;
     double x;
     for(int i = 0; i < lg; i++)
@@ -365,7 +351,7 @@ public:
       write(layers[i].bias, out);
       write(layers[i].output, out);
       write(layers[i].outputDerivative, out);
-      writeD(layers[i].error, out);
+      write(layers[i].error, out);
 
       for(int j = 0; j < layers[i].info.size && i; j++) {
         write(layers[i].weights[j], out);
@@ -390,7 +376,7 @@ public:
       layers[i].bias = read(sz, in);
       layers[i].output = read(sz, in);
       layers[i].outputDerivative = read(sz, in);
-      layers[i].error = readD(sz, in);
+      layers[i].error = read(sz, in);
 
       for(int j = 0; j < sz && i; j++) {
         layers[i].weights[j] = read(layers[i - 1].info.size, in);
