@@ -7,12 +7,10 @@
 #include <cassert>
 #include <queue>
 #include "chess.h"
-//#pragma GCC optimize("Ofast")
 
 using namespace std;
 
 int main() {
-  //mazeSolver();
   chessNN();
   return 0;
 }
