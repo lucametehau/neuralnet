@@ -315,7 +315,7 @@ public:
 /// can load NN from "savePath"
 
 void runTraining(vector <LayerInfo> &topology, vector <NetInput> &input, vector <double> &output,
-                 int dataSize, int batchSize, int epochs, double LR, double split, string savePath, bool load) {
+                 int dataSize, int epochs, double LR, double split, string savePath, bool load) {
 
   int trainSize = dataSize * (1.0 - split);
   double minError = 1e10;
@@ -337,12 +337,6 @@ void runTraining(vector <LayerInfo> &topology, vector <NetInput> &input, vector 
 
     for(int i = 0; i < trainSize; i++) {
       NN.train(input[i], output[i], LR);
-
-      if(i % batchSize == batchSize - 1 || i == trainSize - 1) {
-        //NN.updateWeights(input[i], LR);
-        //NN.train(input[i], output[i], LR);
-        //cout << "Training index: " << i << " / " << trainSize << "\n";
-      }
     }
 
     double tEnd = clock();

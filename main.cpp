@@ -24,7 +24,7 @@ int main() {
   vector <NetInput> input;
   vector <double> output;
 
-  int dataSize = 2900000, batchSize = 1;
+  int dataSize = 2900000;
   int epochs = 10000;
   double LR = 1;
   double split = 0.05;
@@ -76,6 +76,6 @@ int main() {
 
   cout << input.size() << " positions\n";
 
-  runTraining(topology, input, output, (int)input.size(), batchSize, epochs, LR, split, "Clover_40mil_d8.nn", false);
+  runTraining(topology, input, output, (int)input.size(), epochs, LR, split, "Clover_40mil_d8.nn", false);
   return 0;
 }
