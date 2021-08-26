@@ -12,10 +12,9 @@ const double Momentum = 0.3;
 
 const double SIGMOID_SCALE = 0.0075;
 
-const int NONE       = 0;
+const int NO_ACTIV   = 0;
 const int SIGMOID    = 1;
 const int RELU       = 2;
-const int LEAKY_RELU = 3;
 
 namespace tools {
   mt19937_64 gen(time(0));
@@ -61,13 +60,13 @@ public:
     outputDerivative.resize(numNeurons);
     error.resize(numNeurons);
 
-    weights.resize(numNeurons);
-    deltaWeights.resize(numNeurons);
 
     if(prevNumNeurons) {
-      for(int i = 0; i < numNeurons; i++) {
-        deltaWeights[i].resize(prevNumNeurons);
-        weights[i] = tools::createRandomArray(prevNumNeurons);
+      weights.resize(prevNumNeurons);
+      deltaWeights.resize(prevNumNeurons);
+      for(int i = 0; i < prevNumNeurons; i++) {
+        deltaWeights[i].resize(numNeurons);
+        weights[i] = tools::createRandomArray(numNeurons);
       }
     }
   }
@@ -88,50 +87,36 @@ public:
   }
 
   double activationFunction(double x, int type) {
-    if(type == SIGMOID)
-      return 1.0 / (1.0 + exp(-SIGMOID_SCALE * x));
+    if(type == RELU)
+      return std::max(x, 0.0);
 
-    if(x > 0)
-      return x;
-
-    return (type == RELU ? 0 : 0.05 * x);
+    return 1.0 / (1.0 + exp(-SIGMOID_SCALE * x));
   }
 
   double activationFunctionDerivative(double x, int type) {
-    if(type == SIGMOID) {
-      double value = activationFunction(x, type);
-      return value * (1 - value) * SIGMOID_SCALE;
+    if(type == RELU) {
+      return (x > 0);
     }
 
-    if(x > 0)
-      return 1;
-
-    return (type == RELU ? 0 : 0.05);
+    //double value = activationFunction(x, type);
+    return x * (1 - x) * SIGMOID_SCALE;
   }
 
   double calc(NetInput &input) { /// feed forward
-    for(int i = 0; i < layers[0].info.size; i++)
-      layers[0].output[i] = 0;
-
-    for(auto &i : input.ind)
-      layers[0].output[i] = 1;
     double sum;
 
     for(int n = 0; n < layers[1].info.size; n++) {
-      sum = layers[1].bias[n];
+      layers[1].output[n] = layers[1].bias[n];
+    }
 
-      /// when feeding forward to first layer
-      /// we don't have to go through the input
-      /// values that are 0 (which is the output
-      /// of the input layer)
+    for(auto &prevN : input.ind) {
+      for(int n = 0; n < layers[1].info.size; n++)
+        layers[1].output[n] += layers[1].weights[prevN][n];
+    }
 
-      for(auto &prevN : input.ind) {
-        /// layers[0].output[prevN] = 1
-        sum += layers[1].weights[n][prevN];
-      }
-
-      layers[1].output[n] = activationFunction(sum, layers[1].info.activationType);
-      layers[1].outputDerivative[n] = activationFunctionDerivative(sum, layers[1].info.activationType);
+    for(int n = 0; n < layers[1].info.size; n++) {
+      layers[1].output[n] = activationFunction(layers[1].output[n], layers[1].info.activationType);
+      layers[1].outputDerivative[n] = activationFunctionDerivative(layers[1].output[n], layers[1].info.activationType);
     }
 
     for(int l = 2; l < (int)layers.size(); l++) {
@@ -139,133 +124,70 @@ public:
         sum = layers[l].bias[n];
 
         for(int prevN = 0; prevN < layers[l - 1].info.size; prevN++) {
-          sum += layers[l - 1].output[prevN] * layers[l].weights[n][prevN];
+          sum += layers[l - 1].output[prevN] * layers[l].weights[prevN][n];
         }
 
         layers[l].output[n] = activationFunction(sum, layers[l].info.activationType);
-        layers[l].outputDerivative[n] = activationFunctionDerivative(sum, layers[l].info.activationType);
+        layers[l].outputDerivative[n] = activationFunctionDerivative(layers[l].output[n], layers[l].info.activationType);
       }
     }
 
     return layers.back().output[0];
   }
 
-  void removeInput(int ind) {
-    double sum;
-
-    /// layer 1 uses relu
-
-    layers[0].output[ind] = 0;
-
-    for(int n = 0; n < layers[1].info.size; n++) {
-      layers[1].output[n] -= layers[1].weights[n][ind];
-    }
-
-    for(int l = 2; l < (int)layers.size(); l++) {
-      for(int n = 0; n < layers[l].info.size; n++) {
-        sum = layers[l].bias[n];
-
-        for(int prevN = 0; prevN < layers[l - 1].info.size; prevN++) {
-          sum += layers[l - 1].output[prevN] * layers[l].weights[n][prevN];
-        }
-
-        layers[l].output[n] = activationFunction(sum, layers[l].info.activationType);
-      }
-    }
-  }
-
-  void addInput(int ind) {
-    double sum;
-
-    /// layer 1 uses relu
-
-    layers[0].output[ind] = 1;
-
-    for(int n = 0; n < layers[1].info.size; n++) {
-      layers[1].output[n] += layers[1].weights[n][ind];
-    }
-
-    for(int l = 2; l < (int)layers.size(); l++) {
-      for(int n = 0; n < layers[l].info.size; n++) {
-        sum = layers[l].bias[n];
-
-        for(int prevN = 0; prevN < layers[l - 1].info.size; prevN++) {
-          sum += layers[l - 1].output[prevN] * layers[l].weights[n][prevN];
-        }
-
-        layers[l].output[n] = activationFunction(sum, layers[l].info.activationType);
-      }
-    }
-  }
-
-  void checkRemoval() {
-    NetInput input;
-    input.ind.push_back(1);
-    double ans = calc(input);
-    input.ind.push_back(2);
-    calc(input);
-    removeInput(2);
-    input.ind.pop_back();
-    double ans2 = calc(input);
-    cout << ans2 << " " << ans << "\n";
-
-    assert(abs(ans2 - ans) < 1e-9);
-  }
-
   void backProp(double &target) {
     /// for output neurons
-    layers.back().error[0] += (layers.back().output[0] - target) * layers.back().outputDerivative[0];
-
-    //cout << layers.back().error[0] << "\n";
+    layers.back().error[0] = (layers.back().output[0] - target) * layers.back().outputDerivative[0];
 
     /// for hidden layers
-    for(int l = (int)layers.size() - 2; l > 0; l--) {
+
+    int l = layers.size() - 2;
+
+    for(int n = 0; n < layers[l].info.size; n++) {
+      layers[l].error[n] = layers[l + 1].weights[n][0] * layers[l + 1].error[0] * layers[l].outputDerivative[n];
+    }
+
+    for(int l = (int)layers.size() - 3; l > 0; l--) {
       for(int n = 0; n < layers[l].info.size; n++) {
         double sum = 0;
         for(int nextN = 0; nextN < layers[l + 1].info.size; nextN++)
-          sum += layers[l + 1].weights[nextN][n] * layers[l + 1].error[nextN];
+          sum += layers[l + 1].weights[n][nextN] * layers[l + 1].error[nextN];
 
-        layers[l].error[n] += sum * layers[l].outputDerivative[n];
-
-        //cout << layers[l].error[n] << " ";
+        layers[l].error[n] = sum * layers[l].outputDerivative[n];
       }
     }
-    //cout << "\n";
   }
 
   void updateWeights(NetInput &input, double LR) {
-    for(int n = 0; n < layers[1].info.size; n++) {
-      double delta = -LR * layers[1].error[n];
+    double delta, newDelta;
 
-      for(auto &prevN : input.ind) {
-        /// layers[0].output[prevN] = 1
-        double newDelta = delta + Momentum * layers[1].deltaWeights[n][prevN];
-        layers[1].weights[n][prevN] += newDelta;
-        layers[1].deltaWeights[n][prevN] = newDelta;
+    for(auto &prevN : input.ind) {
+      for(int n = 0; n < layers[1].info.size; n++) {
+        newDelta = LR * layers[1].error[n] + Momentum * layers[1].deltaWeights[prevN][n];
+        layers[1].weights[prevN][n] -= newDelta;
+        layers[1].deltaWeights[prevN][n] = newDelta;
       }
+    }
 
-      double newDelta = delta + Momentum * layers[1].deltaBias[n];
-      layers[1].bias[n] += newDelta;
+    for(int n = 0; n < layers[1].info.size; n++) {
+      newDelta = LR * layers[1].error[n] + Momentum * layers[1].deltaBias[n];
+      layers[1].bias[n] -= newDelta;
       layers[1].deltaBias[n] = newDelta;
-
-      layers[1].error[n] = 0;
     }
 
     for(int l = 2; l < (int)layers.size(); l++) {
       for(int n = 0; n < layers[l].info.size; n++) {
-        double delta = -LR * layers[l].error[n];
+        delta = LR * layers[l].error[n];
 
         for(int prevN = 0; prevN < layers[l - 1].info.size; prevN++) {
-          double newDelta = delta * layers[l - 1].output[prevN] + Momentum * layers[l].deltaWeights[n][prevN];
-          layers[l].weights[n][prevN] += newDelta;
-          layers[l].deltaWeights[n][prevN] = newDelta;
+          newDelta = delta * layers[l - 1].output[prevN] + Momentum * layers[l].deltaWeights[prevN][n];
+          layers[l].weights[prevN][n] -= newDelta;
+          layers[l].deltaWeights[prevN][n] = newDelta;
         }
 
         double newDelta = delta + Momentum * layers[l].deltaBias[n];
-        layers[l].bias[n] += newDelta;
+        layers[l].bias[n] -= newDelta;
         layers[l].deltaBias[n] = newDelta;
-
-        layers[l].error[n] = 0;
       }
     }
   }
@@ -302,7 +224,7 @@ public:
 
           double E1 = (ans - target) * (ans - target);
 
-          layers[l].weights[n][prevN] += delta;
+          layers[l].weights[prevN][n] += delta;
 
           //cout << fixed << setprecision(10) << " ans " << ans << "\n";
 
@@ -310,7 +232,7 @@ public:
 
           //cout << fixed << setprecision(10) << " ans " << ans << "\n";
 
-          layers[l].weights[n][prevN] -= delta;
+          layers[l].weights[prevN][n] -= delta;
 
           double E2 = (ans - target) * (ans - target), d = (E2 - E1) / (2.0 * delta);
           //cout << E1 << " " << E2 << "\n";
@@ -353,7 +275,7 @@ public:
       write(layers[i].outputDerivative, out);
       write(layers[i].error, out);
 
-      for(int j = 0; j < layers[i].info.size && i; j++) {
+      for(int j = 0; i && j < layers[i - 1].info.size; j++) {
         write(layers[i].weights[j], out);
       }
     }
@@ -378,8 +300,8 @@ public:
       layers[i].outputDerivative = read(sz, in);
       layers[i].error = read(sz, in);
 
-      for(int j = 0; j < sz && i; j++) {
-        layers[i].weights[j] = read(layers[i - 1].info.size, in);
+      for(int j = 0; i && j < layers[i - 1].info.size; j++) {
+        layers[i].weights[j] = read(layers[i].info.size, in);
       }
     }
   }
@@ -399,8 +321,6 @@ void runTraining(vector <LayerInfo> &topology, vector <NetInput> &input, vector 
   double minError = 1e10;
 
   Network NN(topology);
-
-  NN.checkRemoval();
 
   if(load) {
     NN.load(savePath);
@@ -427,18 +347,21 @@ void runTraining(vector <LayerInfo> &topology, vector <NetInput> &input, vector 
 
     double tEnd = clock();
 
+    double testStart = clock();
     double validationError = NN.calcError(input, output, trainSize, dataSize), trainError = NN.calcError(input, output, 0, trainSize);
+    double testEnd = clock();
 
     cout << "Validation error    : " << validationError << " ; Training Error : " << trainError << "\n";
     cout << "Time taken for epoch: " << (tEnd - tStart) / CLOCKS_PER_SEC << "s\n";
+    cout << "Time taken for error: " << (testEnd - testStart) / CLOCKS_PER_SEC << "s\n";
     cout << "Learning rate       : " << LR << "\n";
 
     NN.save(savePath);
 
-    if(validationError > minError) {
+    if(trainError > minError) {
       LR *= 0.9;
     } else {
-      minError = validationError;
+      minError = trainError;
     }
   }
 }
