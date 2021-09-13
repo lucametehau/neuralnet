@@ -10,10 +10,6 @@
 
 using namespace std;
 
-double inverseSigmoid(double val) {
-  return log(val / (1.0 - val)) / SIGMOID_SCALE;
-}
-
 int main() {
   vector <LayerInfo> topology;
 
@@ -24,39 +20,26 @@ int main() {
   vector <NetInput> input;
   vector <double> output;
 
-  int dataSize = 2900000;
-  int epochs = 10000;
-  double LR = 1;
+  int dataSize = 3300000, batchSize = 1;
+  int epochs = 100;
+  double LR = 0.150095;
   double split = 0.05;
 
-  Network NN(topology);
+  /*Network NN(topology);
 
-  NN.load("Clover_40mil_d8.nn");
+  NN.load("test.nn");
+
+  NN.evalTestPos();
 
   char s[105];
 
   while(1) {
     cin.getline(s, 100);
 
-    cout << s << "\n";
-    string fen = "";
-    int ind = 0;
-    char realFen[105];
+    NN.evaluate(s);
+  }*/
 
-    while(s[ind] != ' ')
-      fen += s[ind++];
-
-    strcpy(realFen, fen.c_str());
-
-    cout << realFen << "\n";
-
-    NetInput input = chessTraining::fenToInput(realFen);
-    double ans = NN.calc(input);
-    cout << ans << "\n";
-    cout << inverseSigmoid(ans) << "\n" << 1.0 / (1.0 + exp(-inverseSigmoid(ans) * SIGMOID_SCALE)) << "\n";
-  }
-
-  chessTraining::readDataset(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData0.txt", true);
+  /*chessTraining::readDataset(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData0.txt", true);
   chessTraining::readDataset(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData1.txt", true);
   chessTraining::readDataset(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData2.txt", true);
   chessTraining::readDataset(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData3.txt", true);
@@ -72,10 +55,87 @@ int main() {
   chessTraining::readDataset(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData2.4.txt", true);
   chessTraining::readDataset(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData2.5.txt", true);
   chessTraining::readDataset(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData2.6.txt", true);
-  chessTraining::readDataset(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData2.7.txt", true);
+  chessTraining::readDataset(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData2.7.txt", true);*/
 
-  cout << input.size() << " positions\n";
+  chessTraining::readDataset(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData3.0.txt", true);
+  chessTraining::readDataset(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData3.1.txt", true);
+  chessTraining::readDataset(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData3.2.txt", true);
+  chessTraining::readDataset(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData3.3.txt", true);
+  chessTraining::readDataset(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData3.4.txt", true);
+  chessTraining::readDataset(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData3.5.txt", true);
+  chessTraining::readDataset(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData3.6.txt", true);
+  chessTraining::readDataset(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData3.7.txt", true);
 
-  runTraining(topology, input, output, (int)input.size(), epochs, LR, split, "Clover_40mil_d8.nn", false);
+  chessTraining::readDataset(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData4.0.txt", true);
+  chessTraining::readDataset(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData4.1.txt", true);
+  chessTraining::readDataset(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData4.2.txt", true);
+  chessTraining::readDataset(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData4.3.txt", true);
+  chessTraining::readDataset(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData4.4.txt", true);
+  chessTraining::readDataset(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData4.5.txt", true);
+  chessTraining::readDataset(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData4.6.txt", true);
+  chessTraining::readDataset(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData4.7.txt", true);
+
+  chessTraining::readDataset(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData5.0.txt", true);
+  chessTraining::readDataset(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData5.1.txt", true);
+  chessTraining::readDataset(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData5.2.txt", true);
+  chessTraining::readDataset(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData5.3.txt", true);
+  chessTraining::readDataset(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData5.4.txt", true);
+  chessTraining::readDataset(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData5.5.txt", true);
+  chessTraining::readDataset(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData5.6.txt", true);
+  chessTraining::readDataset(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData5.7.txt", true);
+
+  chessTraining::readDataset(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData6.0.txt", true);
+  chessTraining::readDataset(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData6.1.txt", true);
+  chessTraining::readDataset(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData6.2.txt", true);
+  chessTraining::readDataset(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData6.3.txt", true);
+  chessTraining::readDataset(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData6.4.txt", true);
+  chessTraining::readDataset(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData6.5.txt", true);
+  chessTraining::readDataset(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData6.6.txt", true);
+  chessTraining::readDataset(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData6.7.txt", true);
+
+  chessTraining::readDataset(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData7.0.txt", true);
+  chessTraining::readDataset(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData7.1.txt", true);
+  chessTraining::readDataset(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData7.2.txt", true);
+  chessTraining::readDataset(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData7.3.txt", true);
+  chessTraining::readDataset(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData7.4.txt", true);
+  chessTraining::readDataset(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData7.5.txt", true);
+  chessTraining::readDataset(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData7.6.txt", true);
+  chessTraining::readDataset(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData7.7.txt", true);
+
+  chessTraining::readDataset(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData8.0.txt", true);
+  chessTraining::readDataset(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData8.1.txt", true);
+  chessTraining::readDataset(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData8.2.txt", true);
+  chessTraining::readDataset(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData8.3.txt", true);
+  chessTraining::readDataset(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData8.4.txt", true);
+  chessTraining::readDataset(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData8.5.txt", true);
+  chessTraining::readDataset(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData8.6.txt", true);
+  chessTraining::readDataset(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData8.7.txt", true);
+
+  int nrInputs = (int)input.size();
+
+  cout << nrInputs << " positions\n";
+
+  /// shuffle training data
+
+  vector <int> v(nrInputs);
+
+  for(int i = 0; i < nrInputs; i++)
+    v[i] = i;
+
+  random_shuffle(v.begin(), v.end());
+
+  for(int i = 0; i < nrInputs; i++) {
+    swap(input[i], input[v[i]]);
+    swap(output[i], output[v[i]]);
+  }
+
+  for(int i = 0; i < 100; i++) {
+    cout << "Position #" << i << "/100" << "\n";
+    for(auto &j : input[i].ind)
+      cout << j << " ";
+    cout << "\n" << output[i] << "\n";
+  }
+
+  runTraining(topology, input, output, (int)input.size(), batchSize, epochs, LR, split, "deeznuts.nn", true);
   return 0;
 }
