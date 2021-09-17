@@ -20,10 +20,11 @@ int main() {
   vector <NetInput> input;
   vector <double> output;
 
-  int dataSize = 3300000, batchSize = 1;
+  int dataSize = 3300000, batchSize = 4096;
   int epochs = 100;
-  double LR = 0.150095;
   double split = 0.05;
+
+  NetInput in;
 
   /*Network NN(topology);
 
@@ -129,13 +130,13 @@ int main() {
     swap(output[i], output[v[i]]);
   }
 
-  for(int i = 0; i < 100; i++) {
+  /*for(int i = 0; i < 100; i++) {
     cout << "Position #" << i << "/100" << "\n";
     for(auto &j : input[i].ind)
       cout << j << " ";
     cout << "\n" << output[i] << "\n";
-  }
+  }*/
 
-  runTraining(topology, input, output, (int)input.size(), batchSize, epochs, LR, split, "deeznuts.nn", true);
+  runTraining(topology, input, output, (int)input.size(), batchSize, epochs, split, "tst.nn", false);
   return 0;
 }

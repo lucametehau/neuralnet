@@ -50,6 +50,8 @@ namespace chessTraining {
       input.push_back(fenToInput(fen));
       output.push_back(score);
     }
+
+    cout << input.size() << " positions for file " << path << "\n";
   }
 
 }

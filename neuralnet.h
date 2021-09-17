@@ -5,16 +5,27 @@
 #include <algorithm>
 #include <cmath>
 #include <random>
+#include <cstring>
 
 using namespace std;
 
 const double Momentum = 0.3;
+const double BETA1 = 0.9;
+const double BETA2 = 0.999;
+double LR = 0.1;
 
 const double SIGMOID_SCALE = 0.0075;
 
 const int NO_ACTIV   = 0;
 const int SIGMOID    = 1;
 const int RELU       = 2;
+
+string testPos[4] = {
+  "3k4/8/8/8/8/8/8/2QK4 w - - 0 1", ///KQvK
+  "3k4/8/8/8/8/8/8/2RK4 w - - 0 1", ///KRvK
+  "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", /// startpos
+  "2r3k1/5pp1/r7/Np5P/1P2pP2/3nP2q/3Q4/R2R2K1 w - - 0 1", /// king safety
+};
 
 namespace tools {
   mt19937_64 gen(time(0));
@@ -41,9 +52,100 @@ struct NetInput {
   vector <short> ind;
 };
 
-struct FenOutput {
-  double result;
-  double eval;
+int cod(char c) {
+  bool color = 0;
+  if('A' <= c && c <= 'Z') {
+    color = 1;
+    c += 32;
+  }
+
+  int val = 0;
+
+  switch(c) {
+  case 'p':
+    val = 0;
+    break;
+  case 'n':
+    val = 1;
+    break;
+  case 'b':
+    val = 2;
+    break;
+  case 'r':
+    val = 3;
+    break;
+  case 'q':
+    val = 4;
+    break;
+  case 'k':
+    val = 5;
+    break;
+  default:
+    cout << c << "\n";
+    assert(0);
+  }
+
+  return 6 * color + val;
+}
+
+NetInput fenToInput(char fen[]) {
+  NetInput ans;
+  int ind = 0;
+
+  for(int i = 7; i >= 0; i--) {
+    int j = 0;
+    while(j < 8 && fen[ind] != '/') {
+      int sq = 8 * i + j;
+      if(fen[ind] < '0' || '9' < fen[ind]) {
+        int piece = cod(fen[ind]);
+
+        ans.ind.push_back(64 * piece + sq);
+        j++;
+      } else {
+        int nr = fen[ind] - '0';
+        j += nr;
+        sq += nr;
+      }
+      ind++;
+    }
+    ind++;
+  }
+
+  sort(ans.ind.begin(), ans.ind.end());
+
+  return ans;
+}
+
+class Param {
+public:
+  double value, grad;
+  double m1, m2; /// momentums
+
+  Param(double _value, double _m1, double _m2) {
+    value = _value;
+    m1 = _m1;
+    m2 = _m2;
+  }
+
+  Param() {
+    value = 0;
+    m1 = m2 = 0;
+  }
+
+  void add(double _grad) {
+    grad += _grad;
+  }
+
+  void update() {
+    if(!grad)
+      return;
+
+    m1 = m1 * BETA1 + grad * (1.0 - BETA1);
+    m2 = m2 * BETA2 + (grad * grad) * (1.0 - BETA2);
+
+    grad = 0;
+    value -= LR * m1 / (sqrt(m2) + 1e-8);
+  }
 };
 
 class Layer {
@@ -52,9 +154,14 @@ public:
     info = _info;
 
     int numNeurons = _info.size;
+    vector <double> temp(numNeurons);
 
-    bias = tools::createRandomArray(numNeurons);
-    deltaBias.resize(numNeurons);
+    temp = tools::createRandomArray(numNeurons);
+    bias.resize(numNeurons);
+    for(int i = 0; i < numNeurons; i++) {
+      bias[i].value = temp[i];
+      bias[i].m1 = bias[i].m2 = 0;
+    }
 
     output.resize(numNeurons);
     outputDerivative.resize(numNeurons);
@@ -63,18 +170,22 @@ public:
 
     if(prevNumNeurons) {
       weights.resize(prevNumNeurons);
-      deltaWeights.resize(prevNumNeurons);
+
       for(int i = 0; i < prevNumNeurons; i++) {
-        deltaWeights[i].resize(numNeurons);
-        weights[i] = tools::createRandomArray(numNeurons);
+        temp = tools::createRandomArray(numNeurons);
+        weights[i].resize(numNeurons);
+        for(int j = 0; j < numNeurons; j++) {
+          weights[i][j].value = temp[j];
+          weights[i][j].m1 = weights[i][j].m2 = 0;
+        }
       }
     }
   }
 
   LayerInfo info;
-  vector <double> bias, deltaBias;
+  vector <Param> bias;
   vector <double> output, error, outputDerivative;
-  vector <vector <double>> weights, deltaWeights;
+  vector <vector <Param>> weights;
 };
 
 class Network {
@@ -102,16 +213,20 @@ public:
     return x * (1 - x) * SIGMOID_SCALE;
   }
 
+  double inverseSigmoid(double val) {
+    return log(val / (1.0 - val)) / SIGMOID_SCALE;
+  }
+
   double calc(NetInput &input) { /// feed forward
     double sum;
 
     for(int n = 0; n < layers[1].info.size; n++) {
-      layers[1].output[n] = layers[1].bias[n];
+      layers[1].output[n] = layers[1].bias[n].value;
     }
 
     for(auto &prevN : input.ind) {
       for(int n = 0; n < layers[1].info.size; n++)
-        layers[1].output[n] += layers[1].weights[prevN][n];
+        layers[1].output[n] += layers[1].weights[prevN][n].value;
     }
 
     for(int n = 0; n < layers[1].info.size; n++) {
@@ -121,10 +236,10 @@ public:
 
     for(int l = 2; l < (int)layers.size(); l++) {
       for(int n = 0; n < layers[l].info.size; n++) {
-        sum = layers[l].bias[n];
+        sum = layers[l].bias[n].value;
 
         for(int prevN = 0; prevN < layers[l - 1].info.size; prevN++) {
-          sum += layers[l - 1].output[prevN] * layers[l].weights[prevN][n];
+          sum += layers[l - 1].output[prevN] * layers[l].weights[prevN][n].value;
         }
 
         layers[l].output[n] = activationFunction(sum, layers[l].info.activationType);
@@ -144,58 +259,68 @@ public:
     int l = layers.size() - 2;
 
     for(int n = 0; n < layers[l].info.size; n++) {
-      layers[l].error[n] = layers[l + 1].weights[n][0] * layers[l + 1].error[0] * layers[l].outputDerivative[n];
+      layers[l].error[n] = layers[l + 1].weights[n][0].value * layers[l + 1].error[0] * layers[l].outputDerivative[n];
     }
 
     for(int l = (int)layers.size() - 3; l > 0; l--) {
       for(int n = 0; n < layers[l].info.size; n++) {
         double sum = 0;
         for(int nextN = 0; nextN < layers[l + 1].info.size; nextN++)
-          sum += layers[l + 1].weights[n][nextN] * layers[l + 1].error[nextN];
+          sum += layers[l + 1].weights[n][nextN].value * layers[l + 1].error[nextN];
 
         layers[l].error[n] = sum * layers[l].outputDerivative[n];
       }
     }
   }
 
-  void updateWeights(NetInput &input, double LR) {
-    double delta, newDelta;
-
+  void updateGradients(NetInput &input) {
     for(auto &prevN : input.ind) {
       for(int n = 0; n < layers[1].info.size; n++) {
-        newDelta = LR * layers[1].error[n] + Momentum * layers[1].deltaWeights[prevN][n];
-        layers[1].weights[prevN][n] -= newDelta;
-        layers[1].deltaWeights[prevN][n] = newDelta;
+        layers[1].weights[prevN][n].add(layers[1].error[n]);
       }
     }
 
     for(int n = 0; n < layers[1].info.size; n++) {
-      newDelta = LR * layers[1].error[n] + Momentum * layers[1].deltaBias[n];
-      layers[1].bias[n] -= newDelta;
-      layers[1].deltaBias[n] = newDelta;
+      layers[1].bias[n].add(layers[1].error[n]);
     }
 
     for(int l = 2; l < (int)layers.size(); l++) {
       for(int n = 0; n < layers[l].info.size; n++) {
-        delta = LR * layers[l].error[n];
-
         for(int prevN = 0; prevN < layers[l - 1].info.size; prevN++) {
-          newDelta = delta * layers[l - 1].output[prevN] + Momentum * layers[l].deltaWeights[prevN][n];
-          layers[l].weights[prevN][n] -= newDelta;
-          layers[l].deltaWeights[prevN][n] = newDelta;
+          layers[l].weights[prevN][n].add(layers[l].error[n] * layers[l - 1].output[prevN]);
         }
 
-        double newDelta = delta + Momentum * layers[l].deltaBias[n];
-        layers[l].bias[n] -= newDelta;
-        layers[l].deltaBias[n] = newDelta;
+        layers[l].bias[n].add(layers[l].error[n]);
       }
     }
   }
 
-  void train(NetInput &input, double &target, double LR) {
+  void updateWeights(NetInput &input) {
+    for(auto &prevN : input.ind) {
+      for(int n = 0; n < layers[1].info.size; n++) {
+        layers[1].weights[prevN][n].update();
+      }
+    }
+
+    for(int n = 0; n < layers[1].info.size; n++) {
+      layers[1].bias[n].update();
+    }
+
+    for(int l = 2; l < (int)layers.size(); l++) {
+      for(int n = 0; n < layers[l].info.size; n++) {
+        for(int prevN = 0; prevN < layers[l - 1].info.size; prevN++) {
+          layers[l].weights[prevN][n].update();
+        }
+
+        layers[l].bias[n].update();
+      }
+    }
+  }
+
+  void train(NetInput &input, double &target) {
     calc(input);
     backProp(target);
-    updateWeights(input, LR);
+    updateWeights(input);
   }
 
   double calcError(vector <NetInput> &input, vector <double> &output, int l, int r) {
@@ -224,7 +349,7 @@ public:
 
           double E1 = (ans - target) * (ans - target);
 
-          layers[l].weights[prevN][n] += delta;
+          layers[l].weights[prevN][n].value += delta;
 
           //cout << fixed << setprecision(10) << " ans " << ans << "\n";
 
@@ -232,7 +357,7 @@ public:
 
           //cout << fixed << setprecision(10) << " ans " << ans << "\n";
 
-          layers[l].weights[prevN][n] -= delta;
+          layers[l].weights[prevN][n].value -= delta;
 
           double E2 = (ans - target) * (ans - target), d = (E2 - E1) / (2.0 * delta);
           //cout << E1 << " " << E2 << "\n";
@@ -263,6 +388,33 @@ public:
     return v;
   }
 
+  void writeP(vector <Param> &v, ofstream &out) {
+    for(auto &i : v)
+      out << i.value << " ";
+    out << "\n";
+    for(auto &i : v)
+      out << i.m1 << " ";
+    out << "\n";
+    for(auto &i : v)
+      out << i.m2 << " ";
+    out << "\n";
+  }
+
+  vector <Param> readP(int lg, ifstream &in) {
+    vector <Param> v;
+    vector <double> value, m1, m2;
+
+    double x;
+
+    value = read(lg, in);
+    m1 = read(lg, in);
+    m2 = read(lg, in);
+
+    for(int i = 0; i < lg; i++)
+      v.push_back(Param(value[i], m1[i], m2[i]));
+    return v;
+  }
+
   void save(string path) {
     ofstream out (path);
     int cnt = layers.size();
@@ -270,13 +422,14 @@ public:
     out << cnt << "\n";
 
     for(int i = 0; i < (int)layers.size(); i++) {
-      write(layers[i].bias, out);
+      writeP(layers[i].bias, out);
+
       write(layers[i].output, out);
       write(layers[i].outputDerivative, out);
       write(layers[i].error, out);
 
       for(int j = 0; i && j < layers[i - 1].info.size; j++) {
-        write(layers[i].weights[j], out);
+        writeP(layers[i].weights[j], out);
       }
     }
   }
@@ -295,14 +448,41 @@ public:
 
     for(int i = 0; i < (int)layers.size(); i++) {
       int sz = layers[i].info.size;
-      layers[i].bias = read(sz, in);
+      layers[i].bias = readP(sz, in);
+
       layers[i].output = read(sz, in);
       layers[i].outputDerivative = read(sz, in);
       layers[i].error = read(sz, in);
 
       for(int j = 0; i && j < layers[i - 1].info.size; j++) {
-        layers[i].weights[j] = read(layers[i].info.size, in);
+        layers[i].weights[j] = readP(layers[i].info.size, in);
       }
+    }
+  }
+
+  int evaluate(char s[]) {
+    string fen = "";
+    int ind = 0;
+    char realFen[105];
+
+    while(s[ind] != ' ')
+      fen += s[ind++];
+
+    strcpy(realFen, fen.c_str());
+
+    NetInput input = fenToInput(realFen);
+    double ans = calc(input);
+    cout << "Fen: " << s << " ; eval = " << inverseSigmoid(ans) << "\n";
+
+    return int(inverseSigmoid(ans));
+  }
+
+  void evalTestPos() {
+    for(int i = 0; i < 4; i++) {
+      char fen[105];
+      strcpy(fen, testPos[i].c_str());
+
+      evaluate(fen);
     }
   }
 
@@ -315,7 +495,7 @@ public:
 /// can load NN from "savePath"
 
 void runTraining(vector <LayerInfo> &topology, vector <NetInput> &input, vector <double> &output,
-                 int dataSize, int epochs, double LR, double split, string savePath, bool load) {
+                 int dataSize, int batchSize, int epochs, double split, string savePath, bool load) {
 
   int trainSize = dataSize * (1.0 - split);
   double minError = 1e10;
@@ -328,6 +508,10 @@ void runTraining(vector <LayerInfo> &topology, vector <NetInput> &input, vector 
     double validationError = NN.calcError(input, output, trainSize, dataSize), trainError = NN.calcError(input, output, 0, trainSize);
 
     cout << "Validation error : " << validationError << " ; Training Error : " << trainError << "\n";
+
+    NN.evalTestPos();
+
+    //return;
   }
 
   for(int epoch = 1; epoch <= epochs; epoch++) {
@@ -336,7 +520,13 @@ void runTraining(vector <LayerInfo> &topology, vector <NetInput> &input, vector 
     double tStart = clock();
 
     for(int i = 0; i < trainSize; i++) {
-      NN.train(input[i], output[i], LR);
+      NN.calc(input[i]);
+      NN.backProp(output[i]);
+      NN.updateGradients(input[i]);
+
+      if(i % batchSize == batchSize - 1 || i == trainSize - 1) {
+        NN.updateWeights(input[i]);
+      }
     }
 
     double tEnd = clock();
@@ -350,10 +540,15 @@ void runTraining(vector <LayerInfo> &topology, vector <NetInput> &input, vector 
     cout << "Time taken for error: " << (testEnd - testStart) / CLOCKS_PER_SEC << "s\n";
     cout << "Learning rate       : " << LR << "\n";
 
+    NN.evalTestPos();
+
     NN.save(savePath);
 
+    /*if(epoch % 10 == 0)
+      LR *= 0.9; /// decay ?*/
+
     if(trainError > minError) {
-      LR *= 0.9;
+      //LR *= 0.9;
     } else {
       minError = trainError;
     }
