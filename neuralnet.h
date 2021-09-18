@@ -96,23 +96,21 @@ NetInput fenToInput(char fen[]) {
   for(int i = 7; i >= 0; i--) {
     int j = 0;
     while(j < 8 && fen[ind] != '/') {
-      int sq = 8 * i + j;
       if(fen[ind] < '0' || '9' < fen[ind]) {
         int piece = cod(fen[ind]);
 
-        ans.ind.push_back(64 * piece + sq);
+        ans.ind.push_back(64 * piece +
+                          8 * i + j); /// square
         j++;
       } else {
-        int nr = fen[ind] - '0';
-        j += nr;
-        sq += nr;
+        j += fen[ind] - '0';
       }
       ind++;
     }
     ind++;
   }
 
-  sort(ans.ind.begin(), ans.ind.end());
+  //sort(ans.ind.begin(), ans.ind.end());
 
   return ans;
 }
@@ -166,7 +164,6 @@ public:
     }
 
     output.resize(numNeurons);
-    outputDerivative.resize(numNeurons);
     error.resize(numNeurons);
 
 
@@ -186,7 +183,7 @@ public:
 
   LayerInfo info;
   vector <Param> bias;
-  vector <double> output, error, outputDerivative;
+  vector <double> output, error;
   vector <vector <Param>> weights;
 };
 
@@ -201,7 +198,7 @@ public:
 
   double activationFunction(double x, int type) {
     if(type == RELU)
-      return std::max(x, 0.0);
+      return max(x, 0.0);
 
     return 1.0 / (1.0 + exp(-SIGMOID_SCALE * x));
   }
@@ -233,7 +230,6 @@ public:
 
     for(int n = 0; n < layers[1].info.size; n++) {
       layers[1].output[n] = activationFunction(layers[1].output[n], layers[1].info.activationType);
-      layers[1].outputDerivative[n] = activationFunctionDerivative(layers[1].output[n], layers[1].info.activationType);
     }
 
     for(int l = 2; l < (int)layers.size(); l++) {
@@ -245,7 +241,6 @@ public:
         }
 
         layers[l].output[n] = activationFunction(sum, layers[l].info.activationType);
-        layers[l].outputDerivative[n] = activationFunctionDerivative(layers[l].output[n], layers[l].info.activationType);
       }
     }
 
@@ -254,14 +249,16 @@ public:
 
   void backProp(double &target) {
     /// for output neurons
-    layers.back().error[0] = (layers.back().output[0] - target) * layers.back().outputDerivative[0];
+    layers.back().error[0] = (layers.back().output[0] - target) *
+                             activationFunctionDerivative(layers.back().output[0], layers.back().info.activationType);
 
     /// for hidden layers
 
     int l = layers.size() - 2;
 
     for(int n = 0; n < layers[l].info.size; n++) {
-      layers[l].error[n] = layers[l + 1].weights[n][0].value * layers[l + 1].error[0] * layers[l].outputDerivative[n];
+      layers[l].error[n] = layers[l + 1].weights[n][0].value * layers[l + 1].error[0] *
+                           activationFunctionDerivative(layers[l].output[n], layers[l].info.activationType);
     }
 
     for(int l = (int)layers.size() - 3; l > 0; l--) {
@@ -270,7 +267,7 @@ public:
         for(int nextN = 0; nextN < layers[l + 1].info.size; nextN++)
           sum += layers[l + 1].weights[n][nextN].value * layers[l + 1].error[nextN];
 
-        layers[l].error[n] = sum * layers[l].outputDerivative[n];
+        layers[l].error[n] = sum * activationFunctionDerivative(layers[l].output[n], layers[l].info.activationType);
       }
     }
   }

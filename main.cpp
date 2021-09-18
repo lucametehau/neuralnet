@@ -20,8 +20,8 @@ int main() {
   vector <NetInput> input;
   vector <double> output;
 
-  int dataSize = 10000, batchSize = 32;
-  int epochs = 1;
+  int dataSize = 10000, batchSize = 8;
+  int epochs = 100;
   double split = 0.1; /// how big is the validation dataset
 
   chessTraining::readDataset(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData3.0.txt", true);
