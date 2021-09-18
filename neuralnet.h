@@ -13,8 +13,7 @@ using namespace std;
 
 const double BETA1 = 0.9;
 const double BETA2 = 0.999;
-double LR = 0.1;
-
+const double LR = 0.1;
 const double SIGMOID_SCALE = 0.0075;
 
 const int NO_ACTIV   = 0;
@@ -32,6 +31,7 @@ namespace tools {
   mt19937_64 gen(time(0));
   uniform_real_distribution <double> rng(0, 1);
   uniform_int_distribution <int> bin(0, 1);
+  uniform_int_distribution <int> integer(0, (int)1e9);
 
   vector <double> createRandomArray(int length) {
     vector <double> v;
@@ -115,20 +115,19 @@ NetInput fenToInput(char fen[]) {
   return ans;
 }
 
-class Param {
+class Gradient {
 public:
-  double value, grad;
+  double grad;
   double m1, m2; /// momentums
 
-  Param(double _value, double _m1, double _m2) {
-    value = _value;
+  Gradient(double _m1, double _m2) {
     m1 = _m1;
     m2 = _m2;
     grad = 0;
   }
 
-  Param() {
-    value = grad = 0;
+  Gradient() {
+    grad = 0;
     m1 = m2 = 0;
   }
 
@@ -136,15 +135,15 @@ public:
     grad += _grad;
   }
 
-  void update() {
+  double getValue() {
     if(!grad)
-      return;
+      return 0;
 
     m1 = m1 * BETA1 + grad * (1.0 - BETA1);
     m2 = m2 * BETA2 + (grad * grad) * (1.0 - BETA2);
 
     grad = 0;
-    value -= LR * m1 / (sqrt(m2) + 1e-8);
+    return LR * m1 / (sqrt(m2) + 1e-8);
   }
 };
 
@@ -156,12 +155,8 @@ public:
     int numNeurons = _info.size;
     vector <double> temp(numNeurons);
 
-    temp = tools::createRandomArray(numNeurons);
-    bias.resize(numNeurons);
-    for(int i = 0; i < numNeurons; i++) {
-      bias[i].value = temp[i];
-      bias[i].m1 = bias[i].m2 = 0;
-    }
+    bias = tools::createRandomArray(numNeurons);
+    biasGrad.resize(numNeurons);
 
     output.resize(numNeurons);
     error.resize(numNeurons);
@@ -169,22 +164,24 @@ public:
 
     if(prevNumNeurons) {
       weights.resize(prevNumNeurons);
+      weightsGrad.resize(prevNumNeurons);
 
       for(int i = 0; i < prevNumNeurons; i++) {
-        temp = tools::createRandomArray(numNeurons);
-        weights[i].resize(numNeurons);
-        for(int j = 0; j < numNeurons; j++) {
-          weights[i][j].value = temp[j];
-          weights[i][j].m1 = weights[i][j].m2 = 0;
-        }
+        weights[i] = tools::createRandomArray(numNeurons);
+        weightsGrad[i].resize(numNeurons);
       }
     }
   }
 
   LayerInfo info;
-  vector <Param> bias;
+
+  vector <double> bias;
+  vector <Gradient> biasGrad;
+
   vector <double> output, error;
-  vector <vector <Param>> weights;
+
+  vector <vector <double>> weights;
+  vector <vector <Gradient>> weightsGrad;
 };
 
 class Network {
@@ -220,12 +217,12 @@ public:
     double sum;
 
     for(int n = 0; n < layers[1].info.size; n++) {
-      layers[1].output[n] = layers[1].bias[n].value;
+      layers[1].output[n] = layers[1].bias[n];
     }
 
     for(auto &prevN : input.ind) {
       for(int n = 0; n < layers[1].info.size; n++)
-        layers[1].output[n] += layers[1].weights[prevN][n].value;
+        layers[1].output[n] += layers[1].weights[prevN][n];
     }
 
     for(int n = 0; n < layers[1].info.size; n++) {
@@ -234,10 +231,10 @@ public:
 
     for(int l = 2; l < (int)layers.size(); l++) {
       for(int n = 0; n < layers[l].info.size; n++) {
-        sum = layers[l].bias[n].value;
+        sum = layers[l].bias[n];
 
         for(int prevN = 0; prevN < layers[l - 1].info.size; prevN++) {
-          sum += layers[l - 1].output[prevN] * layers[l].weights[prevN][n].value;
+          sum += layers[l - 1].output[prevN] * layers[l].weights[prevN][n];
         }
 
         layers[l].output[n] = activationFunction(sum, layers[l].info.activationType);
@@ -257,7 +254,7 @@ public:
     int l = layers.size() - 2;
 
     for(int n = 0; n < layers[l].info.size; n++) {
-      layers[l].error[n] = layers[l + 1].weights[n][0].value * layers[l + 1].error[0] *
+      layers[l].error[n] = layers[l + 1].weights[n][0] * layers[l + 1].error[0] *
                            activationFunctionDerivative(layers[l].output[n], layers[l].info.activationType);
     }
 
@@ -265,7 +262,7 @@ public:
       for(int n = 0; n < layers[l].info.size; n++) {
         double sum = 0;
         for(int nextN = 0; nextN < layers[l + 1].info.size; nextN++)
-          sum += layers[l + 1].weights[n][nextN].value * layers[l + 1].error[nextN];
+          sum += layers[l + 1].weights[n][nextN] * layers[l + 1].error[nextN];
 
         layers[l].error[n] = sum * activationFunctionDerivative(layers[l].output[n], layers[l].info.activationType);
       }
@@ -275,21 +272,21 @@ public:
   void updateGradients(NetInput &input) {
     for(auto &prevN : input.ind) {
       for(int n = 0; n < layers[1].info.size; n++) {
-        layers[1].weights[prevN][n].add(layers[1].error[n]);
+        layers[1].weightsGrad[prevN][n].add(layers[1].error[n]);
       }
     }
 
     for(int n = 0; n < layers[1].info.size; n++) {
-      layers[1].bias[n].add(layers[1].error[n]);
+      layers[1].biasGrad[n].add(layers[1].error[n]);
     }
 
     for(int l = 2; l < (int)layers.size(); l++) {
       for(int n = 0; n < layers[l].info.size; n++) {
         for(int prevN = 0; prevN < layers[l - 1].info.size; prevN++) {
-          layers[l].weights[prevN][n].add(layers[l].error[n] * layers[l - 1].output[prevN]);
+          layers[l].weightsGrad[prevN][n].add(layers[l].error[n] * layers[l - 1].output[prevN]);
         }
 
-        layers[l].bias[n].add(layers[l].error[n]);
+        layers[l].biasGrad[n].add(layers[l].error[n]);
       }
     }
   }
@@ -297,21 +294,21 @@ public:
   void updateWeights(NetInput &input) {
     for(auto &prevN : input.ind) {
       for(int n = 0; n < layers[1].info.size; n++) {
-        layers[1].weights[prevN][n].update();
+        layers[1].weights[prevN][n] -= layers[1].weightsGrad[prevN][n].getValue();
       }
     }
 
     for(int n = 0; n < layers[1].info.size; n++) {
-      layers[1].bias[n].update();
+      layers[1].bias[n] -= layers[1].biasGrad[n].getValue();
     }
 
     for(int l = 2; l < (int)layers.size(); l++) {
       for(int n = 0; n < layers[l].info.size; n++) {
         for(int prevN = 0; prevN < layers[l - 1].info.size; prevN++) {
-          layers[l].weights[prevN][n].update();
+          layers[l].weights[prevN][n] -= layers[l].weightsGrad[prevN][n].getValue();
         }
 
-        layers[l].bias[n].update();
+        layers[l].bias[n] -= layers[l].biasGrad[n].getValue();
       }
     }
   }
@@ -342,7 +339,7 @@ public:
 
           double E1 = (ans - target) * (ans - target);
 
-          layers[l].weights[prevN][n].value += delta;
+          layers[l].weights[prevN][n] += delta;
 
           //cout << fixed << setprecision(10) << " ans " << ans << "\n";
 
@@ -350,7 +347,7 @@ public:
 
           //cout << fixed << setprecision(10) << " ans " << ans << "\n";
 
-          layers[l].weights[prevN][n].value -= delta;
+          layers[l].weights[prevN][n] -= delta;
 
           double E2 = (ans - target) * (ans - target), d = (E2 - E1) / (2.0 * delta);
           //cout << E1 << " " << E2 << "\n";
@@ -376,11 +373,17 @@ public:
 
     for(int i = 0; i < (int)layers.size(); i++) {
       int sz = layers[i].info.size;
-      x = fwrite(&layers[i].bias[0], sizeof(Param), sz, f);
+      x = fwrite(&layers[i].bias[0], sizeof(double), sz, f);
+      assert(x == sz);
+
+      x = fwrite(&layers[i].biasGrad[0], sizeof(Gradient), sz, f);
       assert(x == sz);
 
       for(int j = 0; i && j < layers[i - 1].info.size; j++) {
-        x = fwrite(&layers[i].weights[j][0], sizeof(Param), sz, f);
+        x = fwrite(&layers[i].weights[j][0], sizeof(double), sz, f);
+        assert(x == sz);
+
+        x = fwrite(&layers[i].weightsGrad[j][0], sizeof(Gradient), sz, f);
         assert(x == sz);
       }
     }
@@ -397,11 +400,17 @@ public:
 
     for(int i = 0; i < (int)layers.size(); i++) {
       int sz = layers[i].info.size;
-      x = fread(&layers[i].bias[0], sizeof(Param), sz, f);
+      x = fread(&layers[i].bias[0], sizeof(double), sz, f);
+      assert(x == sz);
+
+      x = fread(&layers[i].biasGrad[0], sizeof(Gradient), sz, f);
       assert(x == sz);
 
       for(int j = 0; i && j < layers[i - 1].info.size; j++) {
-        x = fread(&layers[i].weights[j][0], sizeof(Param), sz, f);
+        x = fread(&layers[i].weights[j][0], sizeof(double), sz, f);
+        assert(x == sz);
+
+        x = fread(&layers[i].weightsGrad[j][0], sizeof(Gradient), sz, f);
         assert(x == sz);
       }
     }
@@ -444,23 +453,44 @@ public:
 /// can load NN from "savePath"
 
 void runTraining(vector <LayerInfo> &topology, vector <NetInput> &input, vector <double> &output,
-                 int dataSize, int batchSize, int epochs, double split, string savePath, bool load) {
+                 int dataSize, int batchSize, int epochs, double split, string loadPath, string savePath,
+                 bool load, bool shuffle) {
+
+  assert(input.size() == output.size());
 
   int trainSize = dataSize * (1.0 - split);
   double minError = 1e10;
 
   Network NN(topology);
 
+  if(shuffle) {
+    int nrInputs = input.size();
+    cout << nrInputs << " positions\n";
+
+    /// shuffle training data
+
+    for(int i = nrInputs - 1; i >= 0; i--) {
+      int nr = tools::integer(tools::gen) % (i + 1);
+      swap(input[i], input[nr]);
+      swap(output[i], output[nr]);
+    }
+
+    /*for(int i = 0; i < 100; i++) {
+      cout << "Position #" << i << "/100" << "\n";
+      for(auto &j : input[i].ind)
+        cout << j << " ";
+      cout << "\n" << output[i] << "\n";
+    }*/
+  }
+
   if(load) {
-    NN.load(savePath);
+    NN.load(loadPath);
 
     double validationError = NN.calcError(input, output, trainSize, dataSize), trainError = NN.calcError(input, output, 0, trainSize);
 
     cout << "Validation error : " << validationError << " ; Training Error : " << trainError << "\n";
 
     NN.evalTestPos();
-
-    return;
   }
 
   for(int epoch = 1; epoch <= epochs; epoch++) {
@@ -487,7 +517,7 @@ void runTraining(vector <LayerInfo> &topology, vector <NetInput> &input, vector 
     cout << "Validation error    : " << validationError << " ; Training Error : " << trainError << "\n";
     cout << "Time taken for epoch: " << (tEnd - tStart) / CLOCKS_PER_SEC << "s\n";
     cout << "Time taken for error: " << (testEnd - testStart) / CLOCKS_PER_SEC << "s\n";
-    cout << "Learning rate       : " << LR << "\n";
+    //cout << "Learning rate       : " << LR << "\n";
 
     NN.evalTestPos();
 

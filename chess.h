@@ -5,7 +5,7 @@
 using namespace std;
 
 namespace chessTraining {
-  void readDataset(vector <NetInput> &input, vector <double> &output, int dataSize, string path, bool ownData) {
+  void readDataset(vector <NetInput> &input, vector <double> &output, int dataSize, string path) {
     freopen(path.c_str(), "r", stdin);
 
     double gameRes, eval;
@@ -13,11 +13,6 @@ namespace chessTraining {
     char fen[105], a[15], stm, c;
 
     for(int id = 0; id < dataSize; id++) {
-
-      if(dataSize > 1000 && id % (dataSize / 100) == 0) {
-        //cout << "Index " << id << "/" << dataSize << "\n";
-      }
-
       if(feof(stdin)) {
         cout << id << "\n";
         break;
@@ -34,13 +29,9 @@ namespace chessTraining {
       scanf("%lf", &gameRes);
       scanf("%c", &c);
 
-      if(ownData) {
-        scanf("%lf", &eval);
-        if(stm == 'b')
-          eval *= -1;
-      } else {
-        eval = 1505;
-      }
+      scanf("%lf", &eval);
+      if(stm == 'b')
+        eval *= -1;
 
       /// use 40% game result, 60% evaluation
 
