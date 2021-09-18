@@ -6,10 +6,11 @@
 #include <cmath>
 #include <random>
 #include <cstring>
+#include <cassert>
+#include <type_traits>
 
 using namespace std;
 
-const double Momentum = 0.3;
 const double BETA1 = 0.9;
 const double BETA2 = 0.999;
 double LR = 0.1;
@@ -125,10 +126,11 @@ public:
     value = _value;
     m1 = _m1;
     m2 = _m2;
+    grad = 0;
   }
 
   Param() {
-    value = 0;
+    value = grad = 0;
     m1 = m2 = 0;
   }
 
@@ -217,7 +219,7 @@ public:
     return log(val / (1.0 - val)) / SIGMOID_SCALE;
   }
 
-  double calc(NetInput &input) { /// feed forward
+  double feedForward(NetInput &input) { /// feed forward
     double sum;
 
     for(int n = 0; n < layers[1].info.size; n++) {
@@ -317,17 +319,11 @@ public:
     }
   }
 
-  void train(NetInput &input, double &target) {
-    calc(input);
-    backProp(target);
-    updateWeights(input);
-  }
-
   double calcError(vector <NetInput> &input, vector <double> &output, int l, int r) {
     double error = 0;
 
     for(int i = l; i < r; i++) {
-      double ans = calc(input[i]);
+      double ans = feedForward(input[i]);
 
       double delta = (ans - output[i]);
 
@@ -345,7 +341,7 @@ public:
       for(int n = 0; n < layers[l].info.size; n++) {
         for(int prevN = 0; prevN < layers[l - 1].info.size; prevN++) {
           double delta = 0.001;
-          double ans = calc(input);
+          double ans = feedForward(input);
 
           double E1 = (ans - target) * (ans - target);
 
@@ -353,7 +349,7 @@ public:
 
           //cout << fixed << setprecision(10) << " ans " << ans << "\n";
 
-          ans = calc(input);
+          ans = feedForward(input);
 
           //cout << fixed << setprecision(10) << " ans " << ans << "\n";
 
@@ -374,90 +370,46 @@ public:
     }
   }
 
-  void write(vector <double> &v, ofstream &out) {
-    for(auto &i : v)
-      out << i << " ";
-    out << "\n";
-  }
-
-  vector <double> read(int lg, ifstream &in) {
-    vector <double> v;
-    double x;
-    for(int i = 0; i < lg; i++)
-      in >> x, v.push_back(x);
-    return v;
-  }
-
-  void writeP(vector <Param> &v, ofstream &out) {
-    for(auto &i : v)
-      out << i.value << " ";
-    out << "\n";
-    for(auto &i : v)
-      out << i.m1 << " ";
-    out << "\n";
-    for(auto &i : v)
-      out << i.m2 << " ";
-    out << "\n";
-  }
-
-  vector <Param> readP(int lg, ifstream &in) {
-    vector <Param> v;
-    vector <double> value, m1, m2;
-
-    double x;
-
-    value = read(lg, in);
-    m1 = read(lg, in);
-    m2 = read(lg, in);
-
-    for(int i = 0; i < lg; i++)
-      v.push_back(Param(value[i], m1[i], m2[i]));
-    return v;
-  }
-
   void save(string path) {
-    ofstream out (path);
-    int cnt = layers.size();
+    FILE *f = fopen(path.c_str(), "wb");
+    int cnt = layers.size(), x;
 
-    out << cnt << "\n";
-
-    for(int i = 0; i < (int)layers.size(); i++) {
-      writeP(layers[i].bias, out);
-
-      write(layers[i].output, out);
-      write(layers[i].outputDerivative, out);
-      write(layers[i].error, out);
-
-      for(int j = 0; i && j < layers[i - 1].info.size; j++) {
-        writeP(layers[i].weights[j], out);
-      }
-    }
-  }
-
-  void load(string path) {
-    ifstream in (path);
-    int cnt = layers.size(), cnt2 = 0;
-
-    in >> cnt2;
-
-    if(cnt2 != cnt) {
-      cout << "Can't load network!\n";
-      cout << "Expected " << cnt << ", got " << cnt2 << "\n";
-      assert(0);
-    }
+    x = fwrite(&cnt, sizeof(int), 1, f);
+    assert(x == 1);
 
     for(int i = 0; i < (int)layers.size(); i++) {
       int sz = layers[i].info.size;
-      layers[i].bias = readP(sz, in);
-
-      layers[i].output = read(sz, in);
-      layers[i].outputDerivative = read(sz, in);
-      layers[i].error = read(sz, in);
+      x = fwrite(&layers[i].bias[0], sizeof(Param), sz, f);
+      assert(x == sz);
 
       for(int j = 0; i && j < layers[i - 1].info.size; j++) {
-        layers[i].weights[j] = readP(layers[i].info.size, in);
+        x = fwrite(&layers[i].weights[j][0], sizeof(Param), sz, f);
+        assert(x == sz);
       }
     }
+
+    fclose(f);
+  }
+
+  void load(string path) {
+    FILE *f = fopen(path.c_str(), "rb");
+    int cnt = layers.size(), x;
+
+    x = fread(&cnt, sizeof(int), 1, f);
+    assert(x == 1);
+
+    for(int i = 0; i < (int)layers.size(); i++) {
+      int sz = layers[i].info.size;
+      x = fread(&layers[i].bias[0], sizeof(Param), sz, f);
+      assert(x == sz);
+
+      for(int j = 0; i && j < layers[i - 1].info.size; j++) {
+        x = fread(&layers[i].weights[j][0], sizeof(Param), sz, f);
+        assert(x == sz);
+      }
+    }
+
+    fclose(f);
   }
 
   int evaluate(char s[]) {
@@ -471,7 +423,7 @@ public:
     strcpy(realFen, fen.c_str());
 
     NetInput input = fenToInput(realFen);
-    double ans = calc(input);
+    double ans = feedForward(input);
     cout << "Fen: " << s << " ; eval = " << inverseSigmoid(ans) << "\n";
 
     return int(inverseSigmoid(ans));
@@ -511,7 +463,7 @@ void runTraining(vector <LayerInfo> &topology, vector <NetInput> &input, vector 
 
     NN.evalTestPos();
 
-    //return;
+    return;
   }
 
   for(int epoch = 1; epoch <= epochs; epoch++) {
@@ -520,7 +472,7 @@ void runTraining(vector <LayerInfo> &topology, vector <NetInput> &input, vector 
     double tStart = clock();
 
     for(int i = 0; i < trainSize; i++) {
-      NN.calc(input[i]);
+      NN.feedForward(input[i]);
       NN.backProp(output[i]);
       NN.updateGradients(input[i]);
 

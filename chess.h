@@ -51,7 +51,7 @@ namespace chessTraining {
       output.push_back(score);
     }
 
-    cout << input.size() << " positions for file " << path << "\n";
+    //cout << input.size() << " positions for file " << path << "\n";
   }
 
 }
