@@ -33,10 +33,11 @@ namespace chessTraining {
       if(stm == 'b')
         eval *= -1;
 
-      /// use 40% game result, 60% evaluation
+      eval = 1.0 / (1.0 + exp(-eval * SIGMOID_SCALE));
 
-      double score = (id < dataSize * 0.4 || eval == 1505 ?
-                     gameRes : 1.0 / (1.0 + exp(-eval * SIGMOID_SCALE)));
+      /// use 50% game result, 50% evaluation
+
+      double score = eval * 0.5 + gameRes * 0.5;
 
       input.push_back(fenToInput(fen));
       output.push_back(score);

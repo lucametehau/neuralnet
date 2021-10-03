@@ -8,17 +8,18 @@
 #include <cstring>
 #include <cassert>
 #include <type_traits>
+#include <thread>
 
 using namespace std;
 
 const double BETA1 = 0.9;
 const double BETA2 = 0.999;
 const double LR = 0.1;
-const double SIGMOID_SCALE = 0.0075;
+const double SIGMOID_SCALE = 0.0050;
 
-const int NO_ACTIV   = 0;
-const int SIGMOID    = 1;
-const int RELU       = 2;
+const int NO_ACTIV = 0;
+const int SIGMOID  = 1;
+const int RELU     = 2;
 
 string testPos[4] = {
   "3k4/8/8/8/8/8/8/2QK4 w - - 0 1", ///KQvK
@@ -82,7 +83,7 @@ int cod(char c) {
     val = 5;
     break;
   default:
-    cout << c << "\n";
+    cout << "char " << c << "\n";
     assert(0);
   }
 
@@ -129,10 +130,6 @@ public:
   Gradient() {
     grad = 0;
     m1 = m2 = 0;
-  }
-
-  void add(double _grad) {
-    grad += _grad;
   }
 
   double getValue() {
@@ -272,27 +269,27 @@ public:
   void updateGradients(NetInput &input) {
     for(auto &prevN : input.ind) {
       for(int n = 0; n < layers[1].info.size; n++) {
-        layers[1].weightsGrad[prevN][n].add(layers[1].error[n]);
+        layers[1].weightsGrad[prevN][n].grad += layers[1].error[n];
       }
     }
 
     for(int n = 0; n < layers[1].info.size; n++) {
-      layers[1].biasGrad[n].add(layers[1].error[n]);
+      layers[1].biasGrad[n].grad += layers[1].error[n];
     }
 
     for(int l = 2; l < (int)layers.size(); l++) {
       for(int n = 0; n < layers[l].info.size; n++) {
         for(int prevN = 0; prevN < layers[l - 1].info.size; prevN++) {
-          layers[l].weightsGrad[prevN][n].add(layers[l].error[n] * layers[l - 1].output[prevN]);
+          layers[l].weightsGrad[prevN][n].grad += layers[l].error[n] * layers[l - 1].output[prevN];
         }
 
-        layers[l].biasGrad[n].add(layers[l].error[n]);
+        layers[l].biasGrad[n].grad += layers[l].error[n];
       }
     }
   }
 
-  void updateWeights(NetInput &input) {
-    for(auto &prevN : input.ind) {
+  void updateWeights() {
+    for(int prevN = 0; prevN < layers[0].info.size; prevN++) {
       for(int n = 0; n < layers[1].info.size; n++) {
         layers[1].weights[prevN][n] -= layers[1].weightsGrad[prevN][n].getValue();
       }
@@ -447,13 +444,67 @@ public:
   vector <Layer> layers;
 };
 
+void trainOnMiniBatch(Network &NN, vector <NetInput> &input, vector <double> &output, int l, int r) {
+  for(int i = l; i < r; i++) {
+    NN.feedForward(input[i]);
+    NN.backProp(output[i]);
+    NN.updateGradients(input[i]);
+  }
+}
+
+void trainOnBatch(Network &NN, vector <NetInput> &input, vector <double> &output, int l, int r, int nrThreads) {
+  int batchSize = (r - l) / nrThreads + 1; /// split batch in batches for each thread
+
+  vector <thread> threads(nrThreads);
+  vector <Network> nets;
+
+  for(int i = 0; i < nrThreads; i++)
+    nets.push_back(NN);
+
+  //double t1 = clock();
+
+  int ind = l, id = 0;
+  for(auto &t : threads) {
+    t = thread{ trainOnMiniBatch, ref(nets[id]), ref(input), ref(output), ind, min(ind + batchSize, r) };
+    ind += batchSize;
+    id++;
+  }
+
+  for(auto &t : threads)
+    t.join();
+
+  //cout << (clock() - t1) / CLOCKS_PER_SEC << "s\n";
+
+  /// sum up gradients
+
+  //t1 = clock();
+
+  for(int l = 1; l < (int)NN.layers.size(); l++) {
+    for(int prevN = 0; prevN < NN.layers[l - 1].info.size; prevN++) {
+      for(int n = 0; n < NN.layers[l].info.size; n++) {
+        for(int j = 0; j < nrThreads; j++)
+          NN.layers[l].weightsGrad[prevN][n].grad += nets[j].layers[l].weightsGrad[prevN][n].grad;
+      }
+
+
+    }
+    for(int n = 0; n < NN.layers[l].info.size; n++) {
+      for(int j = 0; j < nrThreads; j++) {
+        NN.layers[l].biasGrad[n].grad += nets[j].layers[l].biasGrad[n].grad;
+      }
+    }
+  }
+
+  //cout << (clock() - t1) / CLOCKS_PER_SEC << "s\n";
+}
+
 /// runs training on given input, output, dataSize, epochs, LR
 /// splits data into training and testing according to split
 /// saves NN to "savePath"
 /// can load NN from "savePath"
 
 void runTraining(vector <LayerInfo> &topology, vector <NetInput> &input, vector <double> &output,
-                 int dataSize, int batchSize, int epochs, double split, string loadPath, string savePath,
+                 int dataSize, int batchSize, int epochs, int nrThreads, double split, string loadPath, string savePath,
                  bool load, bool shuffle) {
 
   assert(input.size() == output.size());
@@ -498,14 +549,10 @@ void runTraining(vector <LayerInfo> &topology, vector <NetInput> &input, vector 
 
     double tStart = clock();
 
-    for(int i = 0; i < trainSize; i++) {
-      NN.feedForward(input[i]);
-      NN.backProp(output[i]);
-      NN.updateGradients(input[i]);
+    for(int i = 0; i < trainSize; i += batchSize) {
+      trainOnBatch(NN, input, output, i, min(i + batchSize, trainSize), nrThreads);
 
-      if(i % batchSize == batchSize - 1 || i == trainSize - 1) {
-        NN.updateWeights(input[i]);
-      }
+      NN.updateWeights();
     }
 
     double tEnd = clock();
