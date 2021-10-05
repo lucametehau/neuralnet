@@ -14,7 +14,7 @@ using namespace std;
 
 const double BETA1 = 0.9;
 const double BETA2 = 0.999;
-const double LR = 0.1;
+const double LR = 0.01;
 const double SIGMOID_SCALE = 0.0050;
 
 const int NO_ACTIV = 0;

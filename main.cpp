@@ -20,13 +20,24 @@ int main() {
   vector <NetInput> input;
   vector <double> output;
 
+  chessTraining::init();
+
   int dataSize, batchSize, nrEpochs, nrThreads;
   double split;
 
   cin >> dataSize >> batchSize >> nrEpochs >> nrThreads >> split;
 
   {
-    chessTraining::readDataset(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData3.0.txt");
+    chessTraining::readMultipleDatasets(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData3", 8);
+    chessTraining::readMultipleDatasets(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData4", 8);
+    chessTraining::readMultipleDatasets(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData5", 8);
+    chessTraining::readMultipleDatasets(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData6", 8);
+    chessTraining::readMultipleDatasets(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData7", 8);
+    chessTraining::readMultipleDatasets(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData8", 8);
+    chessTraining::readMultipleDatasets(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData9", 8);
+    chessTraining::readMultipleDatasets(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\CloverEngine-2.4\\CloverEngine-2.4\\CloverData.12", 8);
+
+    /*chessTraining::readDataset(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData3.0.txt");
     chessTraining::readDataset(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData3.1.txt");
     chessTraining::readDataset(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData3.2.txt");
     chessTraining::readDataset(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData3.3.txt");
@@ -89,17 +100,17 @@ int main() {
     chessTraining::readDataset(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData9.6.txt");
     chessTraining::readDataset(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData9.7.txt");
 
-    chessTraining::readDataset(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData11.0.txt");
-    chessTraining::readDataset(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData11.1.txt");
-    chessTraining::readDataset(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData11.2.txt");
-    chessTraining::readDataset(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData11.3.txt");
-    chessTraining::readDataset(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData11.4.txt");
-    chessTraining::readDataset(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData11.5.txt");
-    chessTraining::readDataset(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData11.6.txt");
-    chessTraining::readDataset(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData11.7.txt");
+    chessTraining::readDataset(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\CloverEngine-2.4\\CloverEngine-2.4\\CloverData.12.0.txt");
+    chessTraining::readDataset(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\CloverEngine-2.4\\CloverEngine-2.4\\CloverData.12.1.txt");
+    chessTraining::readDataset(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\CloverEngine-2.4\\CloverEngine-2.4\\CloverData.12.2.txt");
+    chessTraining::readDataset(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\CloverEngine-2.4\\CloverEngine-2.4\\CloverData.12.3.txt");
+    chessTraining::readDataset(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\CloverEngine-2.4\\CloverEngine-2.4\\CloverData.12.4.txt");
+    chessTraining::readDataset(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\CloverEngine-2.4\\CloverEngine-2.4\\CloverData.12.5.txt");
+    chessTraining::readDataset(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\CloverEngine-2.4\\CloverEngine-2.4\\CloverData.12.6.txt");
+    chessTraining::readDataset(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\CloverEngine-2.4\\CloverEngine-2.4\\CloverData.12.7.txt");*/
   }
 
   runTraining(topology, input, output, (int)input.size(), batchSize, nrEpochs, nrThreads, split,
-              "", "b.nn", false, true);
+              "Clover_117mil_d9_e37.nn", "b.nn", true, true);
   return 0;
 }
