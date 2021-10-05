@@ -117,7 +117,7 @@ namespace chessTraining {
     for(auto &t : threads)
       t.join();
 
-    int temp = (int)inputs.size();
+    int temp = (int)input.size();
 
     for(int t = 0; t < nrThreads; t++) {
       for(int i = 0; i < (int)inputs[t].size(); i++) {
