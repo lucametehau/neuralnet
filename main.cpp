@@ -20,7 +20,8 @@ int main() {
   vector <NetInput> input;
   vector <double> output;
 
-  chessTraining::init();
+  table::init();
+  table::init(128);
 
   int dataSize, batchSize, nrEpochs, nrThreads;
   double split;
@@ -28,6 +29,8 @@ int main() {
   cin >> dataSize >> batchSize >> nrEpochs >> nrThreads >> split;
 
   {
+    chessTraining::readMultipleDatasets(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\CloverEngine-2.4\\CloverEngine-2.4\\CloverData11", 8);
+    chessTraining::readMultipleDatasets(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\CloverEngine-2.4\\CloverEngine-2.4\\CloverData.12", 8);
     chessTraining::readMultipleDatasets(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData3", 8);
     chessTraining::readMultipleDatasets(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData4", 8);
     chessTraining::readMultipleDatasets(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData5", 8);
@@ -35,7 +38,6 @@ int main() {
     chessTraining::readMultipleDatasets(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData7", 8);
     chessTraining::readMultipleDatasets(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData8", 8);
     chessTraining::readMultipleDatasets(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData9", 8);
-    chessTraining::readMultipleDatasets(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\CloverEngine-2.4\\CloverEngine-2.4\\CloverData.12", 8);
 
     /*chessTraining::readDataset(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData3.0.txt");
     chessTraining::readDataset(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData3.1.txt");
@@ -111,6 +113,6 @@ int main() {
   }
 
   runTraining(topology, input, output, (int)input.size(), batchSize, nrEpochs, nrThreads, split,
-              "Clover_117mil_d9_e37.nn", "b.nn", true, true);
+              "a.nn", "b.nn", false, true);
   return 0;
 }

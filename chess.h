@@ -7,17 +7,14 @@
 
 using namespace std;
 
-const int MOD1 = (int)1e9 + 3;
-const int MOD2 = (int)1e9 + 7;
-
 mt19937_64 gen(0xBEEF);
 uniform_int_distribution <uint64_t> rng;
 
-mutex M;
+namespace table {
+  const int MB = (1 << 20);
 
-namespace chessTraining {
-  unordered_map <uint64_t, bool> seen;
-  int fileInd;
+  uint64_t entries;
+  vector <uint64_t> hashTable;
 
   uint64_t hashKey[12][64];
 
@@ -39,32 +36,76 @@ namespace chessTraining {
     return h;
   }
 
+  void init(uint64_t sz) {
+    entries = sz * MB;
+
+    hashTable.resize(entries);
+  }
+
+  bool seen(uint64_t h) {
+    if(hashTable[h & (entries - 1)] == h)
+      return 1;
+
+    hashTable[h & (entries - 1)] = h;
+    return 0;
+  }
+}
+
+namespace chessTraining {
+  int fileInd;
+
   void readDataset(vector <NetInput> &input, vector <double> &output, int dataSize, string path) {
     ifstream in(path);
 
-    double gameRes, eval;
     int positions = 0;
 
     fileInd++;
 
-    char fen[105], a[15], stm, c;
+    char stm;
+    string fen, line;
 
-    for(int id = 0; id < dataSize; id++) {
+    for(int id = 0; id < dataSize && getline(in, line); id++) {
       if(in.eof()) {
-        cout << id << "\n";
+        //cout << id << "\n";
         break;
       }
 
-      in >> fen >> stm >> a >> a >> a >> a >> c >> gameRes >> c >> eval;
+      int p = line.find(" "), p2;
 
-      /*M.lock();
-      cout << fen << " " << stm << " " << gameRes << " " << eval << "\n";
-      M.unlock();*/
+      fen = line.substr(0, p);
+
+      stm = line[p + 1];
+
+      p = line.find("[") + 1;
+      p2 = line.find("]");
+
+      string res = line.substr(p, p2 - p);
+      double gameRes;
+
+      if(res == "0")
+        gameRes = 0;
+      else if(res == "0.5")
+        gameRes = 0.5;
+      else
+        gameRes = 1;
+
+      int evalNr = 0, sign = 1;
+
+      p = p2 + 2;
+
+      if(line[p] == '-')
+        sign = -1, p++;
+
+      while(p < (int)line.size())
+        evalNr = evalNr * 10 + line[p++] - '0';
+
+      evalNr *= sign;
 
       if(stm == 'b')
-        eval *= -1;
+        evalNr *= -1;
 
-      eval = 1.0 / (1.0 + exp(-eval * SIGMOID_SCALE));
+
+      double eval = 1.0 / (1.0 + exp(-evalNr * SIGMOID_SCALE));
 
       /// use 50% game result, 50% evaluation
 
@@ -72,60 +113,36 @@ namespace chessTraining {
 
       NetInput inp = fenToInput(fen);
 
-      M.lock();
-      //cout << id << " " << path << "\n";
-      uint64_t h = hashInput(inp);
+      uint64_t h = table::hashInput(inp);
 
-      if(seen.find(h) != seen.end()) {
-        /*if(49 <= fileInd && fileInd <= 56)
-          cout << fen << "already seen in file index " << seen[h] << "\n";*/
-        //cout << id << "\n" << seen[h].first << " " << seen[h].second << "\n" << p.first << " " << p.second << "\n" << fen << " was already seen\n";
-        M.unlock();
-        continue;
+      if(!table::seen(h)) {
+        positions++;
+
+        input.push_back(inp);
+        output.push_back(score);
       }
-
-      seen[h] = 1;
-
-      M.unlock();
-
-      positions++;
-
-      input.push_back(inp);
-      output.push_back(score);
     }
   }
 
-  void readMultipleDatasets(vector <NetInput> &input, vector <double> &output, int dataSize, string path, int nrThreads) {
-    vector <vector <NetInput>> inputs(nrThreads);
-    vector <vector <double>> outputs(nrThreads);
-    vector <thread> threads(nrThreads);
-    vector <string> paths(nrThreads);
+  void readMultipleDatasets(vector <NetInput> &input, vector <double> &output, int dataSize, string path, int nrFiles) {
+    vector <string> paths(nrFiles);
 
-    for(int i = 0; i < nrThreads; i++) {
+    //nrThreads = 1;
+
+    for(int i = 0; i < nrFiles; i++) {
       paths[i] = path + ".";
       paths[i] += char(i + '0');
       paths[i] += ".txt"; /// assuming all files have this format
     }
 
-    int id = 0;
-
-    for(auto &t : threads) {
-      t = thread{ readDataset, ref(inputs[id]), ref(outputs[id]), dataSize, paths[id] };
-      id++;
-    }
-
-    for(auto &t : threads)
-      t.join();
-
+    long double startTime = clock();
     int temp = (int)input.size();
 
-    for(int t = 0; t < nrThreads; t++) {
-      for(int i = 0; i < (int)inputs[t].size(); i++) {
-        input.push_back(inputs[t][i]);
-        output.push_back(outputs[t][i]);
-      }
+    for(int t = 0; t < nrFiles; t++) {
+      readDataset(input, output, dataSize, paths[t]);
     }
 
-    cout << (int)input.size() - temp << " positions for files at " << path << "\n";
+    cout << (clock() - startTime) / CLOCKS_PER_SEC << " seconds for loading "
+         << (int)input.size() - temp << " files\n";
   }
 }
