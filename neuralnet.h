@@ -14,10 +14,10 @@
 
 using namespace std;
 
-const double BETA1 = 0.9;
-const double BETA2 = 0.999;
-const double LR = 0.1;
-const double SIGMOID_SCALE = 0.0030;
+const float BETA1 = 0.9;
+const float BETA2 = 0.999;
+const float SIGMOID_SCALE = 0.0030;
+float LR = 0.1;
 
 const int NO_ACTIV = 0;
 const int SIGMOID  = 1;
@@ -35,13 +35,13 @@ mutex M;
 
 namespace tools {
   mt19937_64 gen(time(0));
-  uniform_real_distribution <double> rng(0, 1);
+  uniform_real_distribution <float> rng(0, 1);
   uniform_int_distribution <int> bin(0, 1);
   uniform_int_distribution <int> integer(0, (int)1e9);
 
-  vector <double> createRandomArray(int length) {
-    vector <double> v;
-    double k = sqrtf(2.0 / length);
+  vector <float> createRandomArray(int length) {
+    vector <float> v;
+    float k = sqrtf(2.0 / length);
 
     for(int i = 0; i < length; i++)
       v.push_back(rng(gen) * k);
@@ -123,9 +123,9 @@ NetInput fenToInput(string fen) {
 
 class Gradient {
 public:
-  double m1, m2; /// momentums
+  float m1, m2; /// momentums
 
-  Gradient(double _m1, double _m2) {
+  Gradient(float _m1, float _m2) {
     m1 = _m1;
     m2 = _m2;
   }
@@ -134,7 +134,7 @@ public:
     m1 = m2 = 0;
   }
 
-  double getValue(double grad) {
+  float getValue(float grad) {
     if(grad == 0)
       return 0;
 
@@ -151,7 +151,7 @@ public:
     info = _info;
 
     int numNeurons = _info.size;
-    vector <double> temp(numNeurons);
+    vector <float> temp(numNeurons);
 
     bias = tools::createRandomArray(numNeurons);
     biasGrad.resize(numNeurons);
@@ -175,12 +175,12 @@ public:
 
   LayerInfo info;
 
-  vector <double> bias, biasGradients;
+  vector <float> bias, biasGradients;
   vector <Gradient> biasGrad;
 
-  vector <double> output;
+  vector <float> output;
 
-  vector <vector <double>> weights, weightsGradients;
+  vector <vector <float>> weights, weightsGradients;
   vector <vector <Gradient>> weightsGrad;
 };
 
@@ -193,28 +193,28 @@ public:
     }
   }
 
-  double activationFunction(double x, int type) {
+  float activationFunction(float x, int type) {
     if(type == RELU)
-      return max(x, 0.0);
+      return max(x, 0.0f);
 
-    return 1.0 / (1.0 + exp(-SIGMOID_SCALE * x));
+    return 1.0f / (1.0f + exp(-SIGMOID_SCALE * x));
   }
 
-  double activationFunctionDerivative(double x, int type) {
+  float activationFunctionDerivative(float x, int type) {
     if(type == RELU) {
       return (x > 0);
     }
 
-    //double value = activationFunction(x, type);
+    //float value = activationFunction(x, type);
     return x * (1 - x) * SIGMOID_SCALE;
   }
 
-  double inverseSigmoid(double val) {
-    return log(val / (1.0 - val)) / SIGMOID_SCALE;
+  float inverseSigmoid(float val) {
+    return log(val / (1 - val)) / SIGMOID_SCALE;
   }
 
-  double feedForward(NetInput &input) { /// feed forward
-    double sum;
+  float feedForward(NetInput &input) { /// feed forward
+    float sum;
 
     for(int n = 0; n < layers[1].info.size; n++) {
       layers[1].output[n] = layers[1].bias[n];
@@ -244,9 +244,9 @@ public:
     return layers.back().output[0];
   }
 
-  void backProp(NetInput &input, double &target) { /// back propagate and update gradients
+  void backProp(NetInput &input, float &target) { /// back propagate and update gradients
     /// for output neuron
-    double outputError = 2 * (layers.back().output[0] - target) *
+    float outputError = 2 * (layers.back().output[0] - target) *
                          activationFunctionDerivative(layers.back().output[0], layers.back().info.activationType);
 
     int l = layers.size() - 1;
@@ -264,7 +264,7 @@ public:
     /// for hidden layers
 
     for(int n = 0; n < layers[l].info.size; n++) {
-      double error = layers[l + 1].weights[n][0] * outputError *
+      float error = layers[l + 1].weights[n][0] * outputError *
                      activationFunctionDerivative(layers[l].output[n], layers[l].info.activationType);
 
       if(error == 0)
@@ -305,14 +305,14 @@ public:
 
     for(int i = 0; i < (int)layers.size(); i++) {
       int sz = layers[i].info.size;
-      x = fwrite(&layers[i].bias[0], sizeof(double), sz, f);
+      x = fwrite(&layers[i].bias[0], sizeof(float), sz, f);
       assert(x == sz);
 
       x = fwrite(&layers[i].biasGrad[0], sizeof(Gradient), sz, f);
       assert(x == sz);
 
       for(int j = 0; i && j < layers[i - 1].info.size; j++) {
-        x = fwrite(&layers[i].weights[j][0], sizeof(double), sz, f);
+        x = fwrite(&layers[i].weights[j][0], sizeof(float), sz, f);
         assert(x == sz);
 
         x = fwrite(&layers[i].weightsGrad[j][0], sizeof(Gradient), sz, f);
@@ -332,14 +332,14 @@ public:
 
     for(int i = 0; i < (int)layers.size(); i++) {
       int sz = layers[i].info.size;
-      x = fread(&layers[i].bias[0], sizeof(double), sz, f);
+      x = fread(&layers[i].bias[0], sizeof(float), sz, f);
       assert(x == sz);
 
       x = fread(&layers[i].biasGrad[0], sizeof(Gradient), sz, f);
       assert(x == sz);
 
       for(int j = 0; i && j < layers[i - 1].info.size; j++) {
-        x = fread(&layers[i].weights[j][0], sizeof(double), sz, f);
+        x = fread(&layers[i].weights[j][0], sizeof(float), sz, f);
         assert(x == sz);
 
         x = fread(&layers[i].weightsGrad[j][0], sizeof(Gradient), sz, f);
@@ -352,7 +352,7 @@ public:
 
   int evaluate(string fen) {
     NetInput input = fenToInput(fen);
-    double ans = feedForward(input);
+    float ans = feedForward(input);
     cout << "Fen: " << fen << " ; eval = " << inverseSigmoid(ans) << "\n";
 
     return int(inverseSigmoid(ans));
@@ -367,28 +367,39 @@ public:
   vector <Layer> layers;
 };
 
-void trainOnMiniBatch(Network &NN, vector <NetInput> &input, vector <double> &output, int l, int r) {
-  for(int i = l; i < r; i++) {
+void trainOnMiniBatch(Network &NN, vector <NetInput> &input, vector <float> &output) {
+  for(int i = 0; i < (int)input.size(); i++) {
     NN.feedForward(input[i]);
     NN.backProp(input[i], output[i]);
     //NN.updateGradients(input[i]);
   }
 }
 
-void trainOnBatch(Network &NN, vector <NetInput> &input, vector <double> &output, int l, int r, int nrThreads) {
+void trainOnBatch(Network &NN, vector <NetInput> &input, vector <float> &output, int l, int r, int nrThreads) {
   int batchSize = (r - l) / nrThreads + 1; /// split batch in batches for each thread
 
   vector <thread> threads(nrThreads);
+  vector <vector <NetInput>> inputs(nrThreads);
+  vector <vector <float>> outputs(nrThreads);
   vector <Network> nets;
+
+  int ind = l;
 
   for(int i = 0; i < nrThreads; i++) {
     nets.push_back(NN);
+
+    int lim = min(r, ind + batchSize);
+
+    while(ind < lim) {
+      inputs[i].push_back(input[ind]);
+      outputs[i].push_back(output[ind]);
+      ind++;
+    }
   }
 
-  int ind = l, id = 0;
+  int id = 0;
   for(auto &t : threads) {
-    t = thread{ trainOnMiniBatch, ref(nets[id]), ref(input), ref(output), ind, min(r, ind + batchSize) };
-    ind += batchSize;
+    t = thread{ trainOnMiniBatch, ref(nets[id]), ref(inputs[id]), ref(outputs[id]) };
     id++;
   }
 
@@ -412,11 +423,11 @@ void trainOnBatch(Network &NN, vector <NetInput> &input, vector <double> &output
   }
 }
 
-void calcErrorBatch(Network &NN, atomic <double> &error, vector <NetInput> &input, vector <double> &output, int l, int r) {
-  double errorBatch = 0;
+void calcErrorBatch(Network &NN, atomic <float> &error, vector <NetInput> &input, vector <float> &output) {
+  float errorBatch = 0;
 
-  for(int i = l; i < r; i++) {
-    double ans = NN.feedForward(input[i]);
+  for(int i = 0; i < (int)input.size(); i++) {
+    float ans = NN.feedForward(input[i]);
     errorBatch += (ans - output[i]) * (ans - output[i]);
   }
 
@@ -427,20 +438,32 @@ void calcErrorBatch(Network &NN, atomic <double> &error, vector <NetInput> &inpu
   M.unlock();
 }
 
-double calcError(Network &NN, vector <NetInput> &input, vector <double> &output, int l, int r) {
-  atomic <double> error {0};
+float calcError(Network &NN, vector <NetInput> &input, vector <float> &output, int l, int r) {
+  atomic <float> error {0};
   const int nrThreads = 8;
   int batchSize = (r - l) / nrThreads + 1;
   vector <thread> threads(nrThreads);
+  vector <vector <NetInput>> inputs(nrThreads);
+  vector <vector <float>> outputs(nrThreads);
   vector <Network> nets;
 
-  for(int i = 0; i < nrThreads; i++)
+  int ind = l;
+
+  for(int i = 0; i < nrThreads; i++) {
     nets.push_back(NN);
 
-  int id = 0, ind = l;
+    int lim = min(r, ind + batchSize);
+
+    while(ind < min(r, lim)) {
+      inputs[i].push_back(input[ind]);
+      outputs[i].push_back(output[ind]);
+      ind++;
+    }
+  }
+
+  int id = 0;
   for(auto &t : threads) {
-    t = thread{ calcErrorBatch, ref(nets[id]), ref(error), ref(input), ref(output), ind, min(ind + batchSize, r) };
-    ind += batchSize;
+    t = thread{ calcErrorBatch, ref(nets[id]), ref(error), ref(inputs[id]), ref(outputs[id]) };
     id++;
   }
 
@@ -455,23 +478,21 @@ double calcError(Network &NN, vector <NetInput> &input, vector <double> &output,
 /// saves NN to "savePath"
 /// can load NN from "savePath"
 
-void runTraining(vector <LayerInfo> &topology, vector <NetInput> &input, vector <double> &output,
-                 int dataSize, int batchSize, int epochs, int nrThreads, double split, string loadPath, string savePath,
+void runTraining(vector <LayerInfo> &topology, vector <NetInput> &input, vector <float> &output,
+                 int dataSize, int batchSize, int epochs, int nrThreads, float split, string loadPath, string savePath,
                  bool load, bool shuffle) {
 
   assert(input.size() == output.size());
 
   int trainSize = dataSize * (1.0 - split);
-  double minError = 1e10;
 
   Network NN(topology);
+
+  /// shuffle training data (to avoid over fitting)
 
   if(shuffle) {
     int nrInputs = input.size();
     cout << nrInputs << " positions\n";
-
-    /// shuffle training data
-
     for(int i = nrInputs - 1; i >= 0; i--) {
       int nr = tools::integer(tools::gen) % (i + 1);
       swap(input[i], input[nr]);
@@ -479,23 +500,27 @@ void runTraining(vector <LayerInfo> &topology, vector <NetInput> &input, vector 
     }
   }
 
+  /// load network
+
   if(load) {
     NN.load(loadPath);
 
-    double validationError = calcError(NN, input, output, trainSize, dataSize), trainError = calcError(NN, input, output, 0, trainSize);
+    float validationError = calcError(NN, input, output, trainSize, dataSize), trainError = calcError(NN, input, output, 0, trainSize);
 
     cout << "Validation error : " << validationError << " ; Training Error : " << trainError << "\n";
 
     NN.evalTestPos();
   }
 
+  /// train
+
   for(int epoch = 1; epoch <= epochs; epoch++) {
     cout << "----------------------------------------- Epoch " << epoch << "/" << epochs << " -----------------------------------------\n";
 
-    double tStart = clock();
+    float tStart = clock();
 
     for(int i = 0; i < trainSize; i += batchSize) {
-      cout << "Batch " << i / batchSize + 1 << "/" << trainSize / batchSize + 1 << "\r";
+      cout << "Batch " << i / batchSize + 1 << "/" << trainSize / batchSize + 1 << " ; " << 1.0 * i / (clock() - tStart) << "positions/s\r";
       trainOnBatch(NN, input, output, i, min(i + batchSize, trainSize), nrThreads);
 
       NN.updateWeights();
@@ -503,11 +528,11 @@ void runTraining(vector <LayerInfo> &topology, vector <NetInput> &input, vector 
 
     cout << "\n";
 
-    double tEnd = clock();
+    float tEnd = clock();
 
-    double testStart = clock();
-    double validationError = calcError(NN, input, output, trainSize, dataSize), trainError = calcError(NN, input, output, 0, trainSize);
-    double testEnd = clock();
+    float testStart = clock();
+    float validationError = calcError(NN, input, output, trainSize, dataSize), trainError = calcError(NN, input, output, 0, trainSize);
+    float testEnd = clock();
 
     cout << "Validation error    : " << validationError << " ; Training Error : " << trainError << "\n";
     cout << "Time taken for epoch: " << (tEnd - tStart) / CLOCKS_PER_SEC << "s\n";
@@ -518,13 +543,7 @@ void runTraining(vector <LayerInfo> &topology, vector <NetInput> &input, vector 
 
     NN.save(savePath);
 
-    /*if(epoch % 10 == 0)
-      LR *= 0.9; /// decay ?*/
-
-    if(trainError > minError) {
-      //LR *= 0.9;
-    } else {
-      minError = trainError;
-    }
+    if(epoch % 20 == 0)
+      LR /= 5;
   }
 }

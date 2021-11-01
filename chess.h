@@ -54,7 +54,7 @@ namespace table {
 namespace chessTraining {
   int fileInd;
 
-  void readDataset(vector <NetInput> &input, vector <double> &output, int dataSize, string path) {
+  void readDataset(vector <NetInput> &input, vector <float> &output, int dataSize, string path) {
     ifstream in(path);
 
     int positions = 0;
@@ -80,7 +80,7 @@ namespace chessTraining {
       p2 = line.find("]");
 
       string res = line.substr(p, p2 - p);
-      double gameRes;
+      float gameRes;
 
       if(res == "0")
         gameRes = 0;
@@ -105,17 +105,17 @@ namespace chessTraining {
         evalNr *= -1;
 
 
-      double eval = 1.0 / (1.0 + exp(-evalNr * SIGMOID_SCALE));
+      float eval = 1.0 / (1.0 + exp(-evalNr * SIGMOID_SCALE));
 
       /// use 50% game result, 50% evaluation
 
-      double score = eval * 0.5 + gameRes * 0.5;
+      float score = eval * 0.5 + gameRes * 0.5;
 
       NetInput inp = fenToInput(fen);
 
-      uint64_t h = table::hashInput(inp);
+      //uint64_t h = table::hashInput(inp);
 
-      if(!table::seen(h)) {
+      if(true) {
         positions++;
 
         input.push_back(inp);
@@ -124,7 +124,7 @@ namespace chessTraining {
     }
   }
 
-  void readMultipleDatasets(vector <NetInput> &input, vector <double> &output, int dataSize, string path, int nrFiles) {
+  void readMultipleDatasets(vector <NetInput> &input, vector <float> &output, int dataSize, string path, int nrFiles) {
     vector <string> paths(nrFiles);
 
     //nrThreads = 1;
@@ -135,7 +135,7 @@ namespace chessTraining {
       paths[i] += ".txt"; /// assuming all files have this format
     }
 
-    long double startTime = clock();
+    float startTime = clock();
     int temp = (int)input.size();
 
     for(int t = 0; t < nrFiles; t++) {
