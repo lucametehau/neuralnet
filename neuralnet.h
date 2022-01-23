@@ -17,7 +17,7 @@ using namespace std;
 const float BETA1 = 0.9;
 const float BETA2 = 0.999;
 const float SIGMOID_SCALE = 0.0030;
-float LR = 0.1;
+float LR = 0.005;
 
 const int NO_ACTIV = 0;
 const int SIGMOID  = 1;
@@ -56,7 +56,38 @@ struct LayerInfo {
 };
 
 struct NetInput {
-  vector <short> ind;
+    uint64_t pieces[2];
+    uint64_t occ;
+
+    NetInput() {
+        pieces[0] = pieces[1] = occ = 0;
+    }
+
+    void setPiece(int ind, int sq, int p) {
+        pieces[ind] = (pieces[ind] << 4) | p;
+        occ |= (1ULL << sq);
+    }
+
+    vector <short> toInput() {
+        uint64_t m = occ;
+        int nr = 1, val = max(0, __builtin_popcountll(occ) - 16);
+        vector <short> input;
+        uint64_t temp[2] = { pieces[0], pieces[1] };
+
+        while (m) {
+            uint64_t lsb = m & -m;
+            int sq = __builtin_ctzll(lsb);
+
+            if (nr <= val)
+                input.push_back(64 * ((temp[0] & 15) - 1) + sq), temp[0] >>= 4;
+            else
+                input.push_back(64 * ((temp[1] & 15) - 1) + sq), temp[1] >>= 4;
+            nr++;
+            m ^= lsb;
+        }
+
+        return input;
+    }
 };
 
 int cod(char c) {
@@ -92,28 +123,44 @@ int cod(char c) {
     exit(0);
   }
 
+  val++;
+
   return 6 * color + val;
 }
 
 NetInput fenToInput(string fen) {
   NetInput ans;
-  int ind = 0;
+  int ind = 0, nr = 1;
+  vector <pair <int, int>> pieces;
 
   for(int i = 7; i >= 0; i--) {
     int j = 0;
+    vector <pair <int, int>> v;
+
     while(j < 8 && fen[ind] != '/') {
       if(fen[ind] < '0' || '9' < fen[ind]) {
         int piece = cod(fen[ind]);
 
-        ans.ind.push_back(64 * piece +
-                          8 * i + j); /// square
+        v.push_back(make_pair(8 * i + j, piece));
         j++;
       } else {
         j += fen[ind] - '0';
       }
       ind++;
     }
+
+    reverse(v.begin(), v.end());
+    for (auto& it : v) {
+        pieces.push_back(it);
+    }
     ind++;
+  }
+
+  //reverse(pieces.begin(), pieces.end());
+
+  for (auto& it : pieces) {
+      ans.setPiece((nr <= 16), it.first, it.second);
+      nr++;
   }
 
   //sort(ans.ind.begin(), ans.ind.end());
@@ -216,11 +263,13 @@ public:
   float feedForward(NetInput &input) { /// feed forward
     float sum;
 
+    vector <short> input_v = input.toInput();
+
     for(int n = 0; n < layers[1].info.size; n++) {
       layers[1].output[n] = layers[1].bias[n];
     }
 
-    for(auto &prevN : input.ind) {
+    for(auto &prevN : input_v) {
       for(int n = 0; n < layers[1].info.size; n++)
         layers[1].output[n] += layers[1].weights[prevN][n];
     }
@@ -250,6 +299,7 @@ public:
                          activationFunctionDerivative(layers.back().output[0], layers.back().info.activationType);
 
     int l = layers.size() - 1;
+    vector <short> input_v = input.toInput();
 
     /// update gradients
 
@@ -272,7 +322,7 @@ public:
 
       /// update gradients
 
-      for(auto &prevN : input.ind) /// assumes l = 1 (only 3 layers)
+      for(auto &prevN : input_v) /// assumes l = 1 (only 3 layers)
         layers[l].weightsGradients[prevN][n] += error;
 
       layers[l].biasGradients[n] += error;
@@ -440,7 +490,7 @@ void calcErrorBatch(Network &NN, atomic <float> &error, vector <NetInput> &input
 
 float calcError(Network &NN, vector <NetInput> &input, vector <float> &output, int l, int r) {
   atomic <float> error {0};
-  const int nrThreads = 8;
+  const int nrThreads = 16;
   int batchSize = (r - l) / nrThreads + 1;
   vector <thread> threads(nrThreads);
   vector <vector <NetInput>> inputs(nrThreads);

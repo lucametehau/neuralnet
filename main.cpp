@@ -14,7 +14,7 @@ int main() {
   vector <LayerInfo> topology;
 
   topology.push_back({768, NO_ACTIV});
-  topology.push_back({256, RELU});
+  topology.push_back({512, RELU});
   topology.push_back({1, SIGMOID});
 
   vector <NetInput> input;
@@ -29,16 +29,11 @@ int main() {
   cin >> dataSize >> batchSize >> nrEpochs >> nrThreads >> split;
 
   {
-    chessTraining::readMultipleDatasets(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\CloverEngine-2.4\\CloverEngine-2.4\\CloverData11", 8);
-    chessTraining::readMultipleDatasets(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\CloverEngine-2.4\\CloverEngine-2.4\\CloverData.12", 8);
-    chessTraining::readMultipleDatasets(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\CloverEngine-2.4\\CloverEngine-2.4\\CloverData13", 8);
-    /*chessTraining::readMultipleDatasets(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData3", 8);
-    chessTraining::readMultipleDatasets(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData4", 8);
-    chessTraining::readMultipleDatasets(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData5", 8);
-    chessTraining::readMultipleDatasets(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData6", 8);
-    chessTraining::readMultipleDatasets(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData7", 8);
-    chessTraining::readMultipleDatasets(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData8", 8);
-    chessTraining::readMultipleDatasets(input, output, dataSize, "C:\\Users\\LMM\\Desktop\\probleme_info\\chess\\CloverData9", 8);*/
+    //chessTraining::readMultipleDatasets(input, output, dataSize, "C:\\Users\\Luca\\source\\repos\\CloverEngine\\CloverData", 16);
+    chessTraining::readMultipleDatasets(input, output, dataSize, "C:\\Users\\Luca\\source\\repos\\CloverEngine\\CloverData_d9_", 16);
+    chessTraining::readMultipleDatasets(input, output, dataSize, "C:\\Users\\Luca\\source\\repos\\CloverEngine\\CloverData_d9_2_", 16);
+    chessTraining::readMultipleDatasets(input, output, dataSize, "C:\\Users\\Luca\\source\\repos\\CloverEngine\\CloerData_d9_3_", 16);
+    chessTraining::readMultipleDatasets(input, output, dataSize, "C:\\Users\\Luca\\source\\repos\\CloverEngine\\CloverData_d9_4", 16);
   }
 
   runTraining(topology, input, output, (int)input.size(), batchSize, nrEpochs, nrThreads, split,

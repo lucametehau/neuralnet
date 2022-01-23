@@ -28,8 +28,9 @@ namespace table {
 
   uint64_t hashInput(NetInput input) {
     uint64_t h = 0;
+    vector <short> input_v = input.toInput();
 
-    for(auto &i : input.ind) {
+    for(auto &i : input_v) {
       h ^= hashKey[i >> 8][i & 63];
     }
 
@@ -130,8 +131,11 @@ namespace chessTraining {
     //nrThreads = 1;
 
     for(int i = 0; i < nrFiles; i++) {
-      paths[i] = path + ".";
-      paths[i] += char(i + '0');
+      paths[i] = path;
+      if (i < 10)
+          paths[i] += char(i + '0');
+      else
+          paths[i] += char(i / 10 + '0'), paths[i] += char(i % 10 + '0');
       paths[i] += ".txt"; /// assuming all files have this format
     }
 
@@ -140,6 +144,7 @@ namespace chessTraining {
 
     for(int t = 0; t < nrFiles; t++) {
       readDataset(input, output, dataSize, paths[t]);
+      cout << "Done with file #" << t << "\n";
     }
 
     cout << (clock() - startTime) / CLOCKS_PER_SEC << " seconds for loading "
