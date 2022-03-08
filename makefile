@@ -22,3 +22,5 @@ NATIVEFLAGS   = -march=native
 
 native:
 	$(CC) $(SRC) $(RFLAGS) $(LIBS) $(NATIVEFLAGS) -o $(EXE)-native$(EXT)
+debug:
+	$(CC) $(SRC) $(RFLAGS) $(LIBS) $(NATIVEFLAGS) -g -o $(EXE)-debug$(EXT)
