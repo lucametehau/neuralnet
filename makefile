@@ -1,7 +1,7 @@
 CC  = g++
 SRC = *.cpp
 
-EXE = training
+EXE = training2
 
 ifeq ($(OS), Windows_NT)
 	EXT = .exe
@@ -10,7 +10,7 @@ else
 endif
 
 WFLAGS = -Wall
-RFLAGS = $(WFLAGS) -std=c++17 -O3
+RFLAGS = $(WFLAGS) -std=c++17 -O3 -fopenmp
 
 ifeq ($(EXT), .exe)
 	RFLAGS += -static -static-libgcc -static-libstdc++
