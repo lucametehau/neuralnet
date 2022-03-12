@@ -60,6 +60,15 @@ struct NetInput {
     }
 };
 
+struct GoodNetInput {
+    uint8_t nr;
+    uint16_t v[32];
+};
+
+struct OutputValues {
+    float output[HIDDEN_NEURONS] __attribute__((aligned(64)));
+} __attribute__((aligned(64)));
+
 int cod(char c) {
     bool color = 0;
     if ('A' <= c && c <= 'Z') {
@@ -163,11 +172,11 @@ int pieceCode(int piece, int sq) {
     return 64 * piece + sq;
 }
 
-void setInput(vector <uint16_t> &input_v, NetInput& input) {
+void setInput(GoodNetInput &input_v, NetInput& input) {
     uint64_t m = input.occ;
     int nr = 1, val = max(0, __builtin_popcountll(input.occ) - 16);
-    input_v.clear();
     uint64_t temp[2] = { input.pieces[0], input.pieces[1] };
+    input_v.nr = 0;
 
     while (m) {
         uint64_t lsb = m & -m;
@@ -176,17 +185,13 @@ void setInput(vector <uint16_t> &input_v, NetInput& input) {
         int p = (temp[bucket] & 15) - 1;
 
 
-        input_v.push_back(pieceCode(p, sq));
+        input_v.v[input_v.nr++] = pieceCode(p, sq);
         temp[bucket] >>= 4;
 
         nr++;
         m ^= lsb;
     }
 }
-
-struct OutputValues {
-    float output[HIDDEN_NEURONS] __attribute__((aligned(64)));
-} __attribute__((aligned(64)));
 
 class Network {
 public:
@@ -213,27 +218,6 @@ public:
         outputBias = 0;
     }
 
-    /*void setInput(NetInput& input) {
-        uint64_t m = input.occ;
-        int nr = 1, val = max(0, __builtin_popcountll(input.occ) - 16);
-        input_v.clear();
-        uint64_t temp[2] = { input.pieces[0], input.pieces[1] };
-
-        while (m) {
-            uint64_t lsb = m & -m;
-            int sq = __builtin_ctzll(lsb);
-            int bucket = (nr > val);
-            int p = (temp[bucket] & 15) - 1;
-
-            
-            input_v.push_back(pieceCode(p, sq));
-            temp[bucket] >>= 4;
-
-            nr++;
-            m ^= lsb;
-        }
-    }*/
-
     float activationFunction(float x, int type) {
         if (type == RELU)
             return max(x, 0.0f);
@@ -254,19 +238,51 @@ public:
         return log(val / (1 - val)) / SIGMOID_SCALE;
     }
 
-    float feedForward(vector <uint16_t> &input_v, OutputValues &o) { /// feed forward
+    float feedForward(GoodNetInput &input_v, OutputValues &o) { /// feed forward
 
         memcpy(o.output, inputBiases, sizeof(o.output));
+        __m256* v = (__m256*)o.output;
 
-        for (auto& prevN : input_v) {
-            for (int j = 0; j < HIDDEN_NEURONS; j++)
-                o.output[j] += inputWeights[prevN][j];
+        for (int i = 0; i < input_v.nr; i++) {
+            __m256* z = (__m256*)inputWeights[input_v.v[i]];
+
+            for (int j = 0; j < batches; j++)
+                v[j] = _mm256_add_ps(v[j], z[j]);
         }
 
         float sum = outputBias;
 
         __m256* w = (__m256*)outputWeights;
-        __m256* v = (__m256*)o.output;
+
+        for (int i = 0; i < batches; i++) {
+            v[i] = _mm256_max_ps(zero, v[i]);
+
+            __m256 tmp = _mm256_mul_ps(v[i], w[i]);
+            float tempRes[8] __attribute__((aligned(16)));
+            _mm256_store_ps(tempRes, tmp);
+
+            sum += tempRes[0] + tempRes[1] + tempRes[2] + tempRes[3] + tempRes[4] + tempRes[5] + tempRes[6] + tempRes[7];
+        }
+
+        return activationFunction(sum, SIGMOID);
+    }
+
+    float feedForward(NetInput &input) {
+        setInput(input_v, input);
+
+        memcpy(output, inputBiases, sizeof(output));
+        __m256* v = (__m256*)output;
+
+        for (int i = 0; i < input_v.nr; i++) {
+            __m256* z = (__m256*)inputWeights[input_v.v[i]];
+
+            for (int j = 0; j < batches; j++)
+                v[j] = _mm256_add_ps(v[j], z[j]);
+        }
+
+        float sum = outputBias;
+
+        __m256* w = (__m256*)outputWeights;
 
         for (int i = 0; i < batches; i++) {
             v[i] = _mm256_max_ps(zero, v[i]);
@@ -282,6 +298,8 @@ public:
     }
 
     void updateWeights() { /// update weights
+        const int nrThreads = 8;
+#pragma omp parallel for schedule(auto) num_threads(nrThreads)
         for (int prevN = 0; prevN < INPUT_NEURONS; prevN++) {
             for (int n = 0; n < HIDDEN_NEURONS; n++) {
                 inputWeights[prevN][n] -= inputWeightsGrad[prevN][n].getValue(inputWeightsGradients[prevN][n]);
@@ -289,11 +307,13 @@ public:
             }
         }
 
+#pragma omp parallel for schedule(auto) num_threads(nrThreads)
         for (int n = 0; n < HIDDEN_NEURONS; n++) {
             inputBiases[n] -= inputBiasesGrad[n].getValue(inputBiasesGradients[n]);
             inputBiasesGradients[n] = 0;
         }
 
+#pragma omp parallel for schedule(auto) num_threads(nrThreads)
         for (int n = 0; n < HIDDEN_NEURONS; n++) {
             outputWeights[n] -= outputWeightsGrad[n].getValue(outputWeightsGradients[n]);
             outputWeightsGradients[n] = 0;
@@ -385,11 +405,8 @@ public:
 
     int evaluate(string fen) {
         NetInput input = fenToInput(fen);
-        vector <uint16_t> input_v;
-        setInput(input_v, input);
 
-        OutputValues o;
-        float ans = feedForward(input_v, o);
+        float ans = feedForward(input);
         cout << "Fen: " << fen << " ; eval = " << inverseSigmoid(ans) << "\n";
 
         return int(inverseSigmoid(ans));
@@ -401,7 +418,7 @@ public:
         }
     }
 
-    //float output[HIDDEN_NEURONS] __attribute__((aligned(64)));
+    float output[HIDDEN_NEURONS] __attribute__((aligned(64)));
     float inputBiases[HIDDEN_NEURONS], outputBias;
     float inputBiasesGradients[HIDDEN_NEURONS], outputBiasGradient;
     float inputWeights[INPUT_NEURONS][HIDDEN_NEURONS], outputWeights[HIDDEN_NEURONS] __attribute__((aligned(64)));
@@ -410,7 +427,7 @@ public:
     Gradient inputWeightsGrad[INPUT_NEURONS][HIDDEN_NEURONS], outputWeightsGrad[HIDDEN_NEURONS];
     Gradient inputBiasesGrad[HIDDEN_NEURONS], outputBiasGrad;
 
-    //vector <uint16_t> input_v;
+    GoodNetInput input_v;
 
     int lg = sizeof(__m256) / sizeof(float);
     int batches = HIDDEN_NEURONS / lg;
@@ -435,12 +452,9 @@ struct ThreadGradients {
         return x * (1 - x) * SIGMOID_SCALE;
     }
 
-    void backProp(vector <uint16_t> &input_v, OutputValues &o, float outputWeights[], float& pred, float& target) { /// back propagate and update gradients
-      /// for output neuron
-        float outputError = 2 * (pred - target) *
-            activationFunctionDerivative(pred, SIGMOID);
-
-        //setInput(input);
+    void backProp(GoodNetInput &input_v, OutputValues &o, float outputWeights[], float& pred, float& target) { /// back propagate and update gradients
+        /// for output neuron
+        float outputError = 2 * (pred - target) * activationFunctionDerivative(pred, SIGMOID);
 
         /// update gradients
 
@@ -456,16 +470,15 @@ struct ThreadGradients {
         /// for hidden layers
 
         for (int n = 0; n < HIDDEN_NEURONS; n++) {
-            float error = outputWeights[n] * outputError *
-                activationFunctionDerivative(o.output[n], RELU);
+            float error = outputWeights[n] * outputError * activationFunctionDerivative(o.output[n], RELU);
 
             if (error == 0)
                 continue;
 
             /// update gradients
 
-            for (auto& prevN : input_v)
-                inputWeightsGradients[prevN][n] += error;
+            for (int i = 0; i < input_v.nr; i++)
+                inputWeightsGradients[input_v.v[i]][n] += error;
 
             inputBiasesGradients[n] += error;
         }
@@ -496,18 +509,18 @@ void sumGradients(Network& NN, Network& nn) {
 void trainOnBatch(Network& NN, vector <NetInput>& input, vector <float>& output, int l, int r, int nrThreads) {
     vector <ThreadGradients> grads(nrThreads);
 
+    vector <OutputValues> o(nrThreads);
+    vector <GoodNetInput> input_v(nrThreads);
+
 #pragma omp parallel for schedule(auto) num_threads(nrThreads)
     for (int i = l; i < r; i++) {
         int th = omp_get_thread_num();
 
-        vector <uint16_t> input_v;
-        OutputValues o;
+        setInput(input_v[th], input[i]);
 
-        setInput(input_v, input[i]);
+        float pred = NN.feedForward(input_v[th], o[th]);
 
-        float pred = NN.feedForward(input_v, o);
-
-        grads[th].backProp(input_v, o, NN.outputWeights, pred, output[i]);
+        grads[th].backProp(input_v[th], o[th], NN.outputWeights, pred, output[i]);
     }
 
 #pragma omp parallel for schedule(auto) num_threads(nrThreads)
@@ -538,13 +551,16 @@ float calcError(Network& NN, vector <NetInput>& input, vector <float>& output, i
     float error = 0;
     const int nrThreads = 15;
 
+    vector <Network> nets;
+
+    for (int i = 0; i < nrThreads; i++)
+        nets.push_back(NN);
+
 #pragma omp parallel for schedule(auto) num_threads(nrThreads) reduction(+ : error)
     for (int i = l; i < r; i++) {
-        vector <uint16_t> input_v;
-        setInput(input_v, input[i]);
+        int th = omp_get_thread_num();
 
-        OutputValues o;
-        float ans = NN.feedForward(input_v, o);
+        float ans = nets[th].feedForward(input[i]);
         error += (ans - output[i]) * (ans - output[i]);
     }
 
@@ -624,7 +640,7 @@ void runTraining(vector <NetInput>& input, vector <float>& output,
 
         NN.save(savePath);
 
-        if (epoch % 15 == 0)
+        if (epoch % 20 == 0)
             LR /= 5;
     }
 }
