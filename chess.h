@@ -1,4 +1,5 @@
 #include "neuralnet.h"
+#include "data.h"
 #include <cstring>
 #include <thread>
 #include <unordered_map>
@@ -55,7 +56,7 @@ namespace table {
 namespace chessTraining {
     int fileInd;
 
-    void readDataset(vector <NetInput>& input, vector <float>& output, int dataSize, string path) {
+    void readDataset(Dataset &dataset, int dataSize, string path) {
         ifstream in(path);
 
         int positions = 0;
@@ -106,11 +107,11 @@ namespace chessTraining {
                 evalNr *= -1;
 
 
-            float eval = 1.0 / (1.0 + exp(-evalNr * SIGMOID_SCALE));
+            float eval = 1.0 / (1.0 + exp(-1.0 * evalNr * SIGMOID_SCALE));
 
             /// use 50% game result, 50% evaluation
 
-            float score = eval * 0.5 + gameRes * 0.5;
+            float score = eval * 1.0 + gameRes * 0.0;
 
             NetInput inp = fenToInput(fen);
 
@@ -119,13 +120,14 @@ namespace chessTraining {
             if (true) {
                 positions++;
 
-                input.push_back(inp);
-                output.push_back(score);
+                dataset.input[dataset.nr] = inp;
+                dataset.output[dataset.nr] = score;
+                dataset.nr++;
             }
         }
     }
 
-    void readMultipleDatasets(vector <NetInput>& input, vector <float>& output, int dataSize, string path, int nrFiles) {
+    void readMultipleDatasets(Dataset &dataset, int dataSize, string path, int nrFiles) {
         vector <string> paths(nrFiles);
 
         //nrThreads = 1;
@@ -140,15 +142,15 @@ namespace chessTraining {
         }
 
         float startTime = clock();
-        int temp = (int)input.size();
+        int temp = dataset.nr;
 
         cout << "Reading files from: " << path << "\n";
         for (int t = 0; t < nrFiles; t++) {
-            readDataset(input, output, dataSize, paths[t]);
+            readDataset(dataset, dataSize, paths[t]);
             cout << "Done with file #" << t << "\n";
         }
 
         cout << (clock() - startTime) / CLOCKS_PER_SEC << " seconds for loading "
-            << (int)input.size() - temp << " files\n";
+            << (int)dataset.nr - temp << " files\n";
     }
 }

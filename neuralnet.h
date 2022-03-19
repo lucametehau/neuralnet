@@ -14,6 +14,7 @@
 #include <immintrin.h>
 #include <inttypes.h>
 #include <omp.h>
+#include "data.h"
 
 using namespace std;
 
@@ -22,9 +23,9 @@ const int HIDDEN_NEURONS = 512;
 
 const float BETA1 = 0.9;
 const float BETA2 = 0.999;
-const float SIGMOID_SCALE = 0.00447111749925;
-const float LAMBDA = 0.0001;
-float LR = 0.1;
+const float SIGMOID_SCALE = 0.00447111749925f;
+//const float LAMBDA = 0.0001;
+const float LR = 0.01f;
 
 const int NO_ACTIV = 0;
 const int SIGMOID = 1;
@@ -43,103 +44,12 @@ mutex M;
 namespace tools {
     mt19937_64 gen(time(0));
     uniform_int_distribution <int> bin(0, 1);
-    uniform_int_distribution <int> integer(0, (int)1e9);
+    uniform_int_distribution <uint64_t> integer;
 }
-
-struct NetInput {
-    uint64_t pieces[2];
-    uint64_t occ;
-
-    NetInput() {
-        pieces[0] = pieces[1] = occ = 0;
-    }
-
-    void setPiece(int ind, int sq, int p) {
-        pieces[ind] = (pieces[ind] << 4) | p;
-        occ |= (1ULL << sq);
-    }
-};
-
-struct GoodNetInput {
-    uint8_t nr;
-    uint16_t v[32];
-};
 
 struct OutputValues {
     float output[HIDDEN_NEURONS] __attribute__((aligned(64)));
 } __attribute__((aligned(64)));
-
-int cod(char c) {
-    bool color = 0;
-    if ('A' <= c && c <= 'Z') {
-        color = 1;
-        c += 32;
-    }
-
-    int val = 0;
-
-    switch (c) {
-    case 'p':
-        val = 0;
-        break;
-    case 'n':
-        val = 1;
-        break;
-    case 'b':
-        val = 2;
-        break;
-    case 'r':
-        val = 3;
-        break;
-    case 'q':
-        val = 4;
-        break;
-    case 'k':
-        val = 5;
-        break;
-    default:
-        cout << "char " << c << "\n";
-        exit(0);
-    }
-
-    val++;
-
-    return 6 * color + val;
-}
-
-NetInput fenToInput(string &fen) {
-    NetInput ans;
-    int ind = 0, nr = 1;
-    uint16_t v[10];
-    int m = 0;
-
-    for (int i = 7; i >= 0; i--) {
-        int j = 0;
-
-        while (j < 8 && fen[ind] != '/') {
-            if (fen[ind] < '0' || '9' < fen[ind]) {
-                int piece = cod(fen[ind]);
-
-                v[++m] = ((piece << 6) | (8 * i + j));
-                j++;
-            }
-            else {
-                j += fen[ind] - '0';
-            }
-            ind++;
-        }
-
-        for (int j = m; j >= 1; j--) {
-            ans.setPiece((nr <= 16), v[j] & 63, v[j] >> 6);
-            nr++;
-        }
-        m = 0;
-
-        ind++;
-    }
-
-    return ans;
-}
 
 class Gradient {
 public:
@@ -154,63 +64,35 @@ public:
         m1 = m2 = 0;
     }
 
-    float getValue(float grad) {
+    float getValue(float &grad) {
         if (grad == 0)
             return 0;
 
         m1 = m1 * BETA1 + grad * (1.0 - BETA1);
-        m2 = m2 * BETA2 + (grad * grad) * (1.0 - BETA2);
+        m2 = m2 * BETA2 + grad * grad * (1.0 - BETA2);
+        grad = 0;
 
-        return LR * m1 / (sqrt(m2) + 1e-8);
+        return LR * m1 / (sqrt(m2) + 1e-8f);
     }
 };
-
-
-
-int pieceCode(int piece, int sq) {
-    //cout << piece << " " << sq << " " << kingCol << " " << int(kingCol) << "\n";
-    return 64 * piece + sq;
-}
-
-void setInput(GoodNetInput &input_v, NetInput& input) {
-    uint64_t m = input.occ;
-    int nr = 1, val = max(0, __builtin_popcountll(input.occ) - 16);
-    uint64_t temp[2] = { input.pieces[0], input.pieces[1] };
-    input_v.nr = 0;
-
-    while (m) {
-        uint64_t lsb = m & -m;
-        int sq = __builtin_ctzll(lsb);
-        int bucket = (nr > val);
-        int p = (temp[bucket] & 15) - 1;
-
-
-        input_v.v[input_v.nr++] = pieceCode(p, sq);
-        temp[bucket] >>= 4;
-
-        nr++;
-        m ^= lsb;
-    }
-}
 
 class Network {
 public:
 
     Network() {
+        float k = sqrt(2.0 / INPUT_NEURONS);
+        normal_distribution <float> rng(0, k);
         for (int i = 0; i < INPUT_NEURONS; i++) {
-            float k = sqrtf(2.0 / INPUT_NEURONS);
-            normal_distribution <float> rng(0, k);
-
             for (int j = 0; j < HIDDEN_NEURONS; j++) {
-                inputWeights[i][j] = rng(tools::gen);
+                inputWeights[i * HIDDEN_NEURONS + j] = rng(tools::gen);
             }
         }
 
-        float k = sqrtf(2.0 / HIDDEN_NEURONS);
-        normal_distribution <float> rng(0, k);
+        k = sqrt(2.0 / HIDDEN_NEURONS);
+        normal_distribution <float> rng2(0, k);
 
         for (int i = 0; i < HIDDEN_NEURONS; i++)
-            outputWeights[i] = rng(tools::gen);
+            outputWeights[i] = rng2(tools::gen);
 
         memset(inputWeightsGradients, 0, sizeof(inputWeightsGradients));
         memset(outputWeightsGradients, 0, sizeof(outputWeightsGradients));
@@ -244,10 +126,13 @@ public:
         __m256* v = (__m256*)o.output;
 
         for (int i = 0; i < input_v.nr; i++) {
-            __m256* z = (__m256*)inputWeights[input_v.v[i]];
+            /*__m256* z = (__m256*)inputWeights[input_v.v[i]];
 
             for (int j = 0; j < batches; j++)
-                v[j] = _mm256_add_ps(v[j], z[j]);
+                v[j] = _mm256_add_ps(v[j], z[j]);*/
+
+            for (int j = 0; j < HIDDEN_NEURONS; j++)
+                o.output[j] += inputWeights[input_v.v[i] * HIDDEN_NEURONS + j];
         }
 
         float sum = outputBias;
@@ -274,10 +159,13 @@ public:
         __m256* v = (__m256*)output;
 
         for (int i = 0; i < input_v.nr; i++) {
-            __m256* z = (__m256*)inputWeights[input_v.v[i]];
+            /*__m256* z = (__m256*)inputWeights[input_v.v[i]];
 
             for (int j = 0; j < batches; j++)
-                v[j] = _mm256_add_ps(v[j], z[j]);
+                v[j] = _mm256_add_ps(v[j], z[j]);*/
+
+            for (int j = 0; j < HIDDEN_NEURONS; j++)
+                output[j] += inputWeights[input_v.v[i] * HIDDEN_NEURONS + j];
         }
 
         float sum = outputBias;
@@ -300,11 +188,9 @@ public:
     void updateWeights() { /// update weights
         const int nrThreads = 8;
 #pragma omp parallel for schedule(auto) num_threads(nrThreads)
-        for (int prevN = 0; prevN < INPUT_NEURONS; prevN++) {
-            for (int n = 0; n < HIDDEN_NEURONS; n++) {
-                inputWeights[prevN][n] -= inputWeightsGrad[prevN][n].getValue(inputWeightsGradients[prevN][n]);
-                inputWeightsGradients[prevN][n] = 0;
-            }
+        for (int n = 0; n < INPUT_NEURONS * HIDDEN_NEURONS; n++) {
+            inputWeights[n] -= inputWeightsGrad[n].getValue(inputWeightsGradients[n]);
+            inputWeightsGradients[n] = 0;
         }
 
 #pragma omp parallel for schedule(auto) num_threads(nrThreads)
@@ -337,14 +223,13 @@ public:
 
         x = fwrite(inputBiasesGrad, sizeof(Gradient), sz, f);
         assert(x == sz);
+        
+        sz = INPUT_NEURONS * HIDDEN_NEURONS;
+        x = fwrite(inputWeights, sizeof(float), sz, f);
+        assert(x == sz);
 
-        for (int j = 0; j < INPUT_NEURONS; j++) {
-            x = fwrite(inputWeights[j], sizeof(float), sz, f);
-            assert(x == sz);
-
-            x = fwrite(inputWeightsGrad[j], sizeof(Gradient), sz, f);
-            assert(x == sz);
-        }
+        x = fwrite(inputWeightsGrad, sizeof(Gradient), sz, f);
+        assert(x == sz);
 
         sz = 1;
 
@@ -378,13 +263,12 @@ public:
         x = fread(inputBiasesGrad, sizeof(Gradient), sz, f);
         assert(x == sz);
 
-        for (int j = 0; j < INPUT_NEURONS; j++) {
-            x = fread(inputWeights[j], sizeof(float), sz, f);
-            assert(x == sz);
+        sz = INPUT_NEURONS * HIDDEN_NEURONS;
+        x = fread(inputWeights, sizeof(float), sz, f);
+        assert(x == sz);
 
-            x = fread(inputWeightsGrad[j], sizeof(Gradient), sz, f);
-            assert(x == sz);
-        }
+        x = fread(inputWeightsGrad, sizeof(Gradient), sz, f);
+        assert(x == sz);
 
         sz = 1;
 
@@ -421,10 +305,10 @@ public:
     float output[HIDDEN_NEURONS] __attribute__((aligned(64)));
     float inputBiases[HIDDEN_NEURONS], outputBias;
     float inputBiasesGradients[HIDDEN_NEURONS], outputBiasGradient;
-    float inputWeights[INPUT_NEURONS][HIDDEN_NEURONS], outputWeights[HIDDEN_NEURONS] __attribute__((aligned(64)));
-    float inputWeightsGradients[INPUT_NEURONS][HIDDEN_NEURONS], outputWeightsGradients[HIDDEN_NEURONS] __attribute__((aligned(64)));
+    float inputWeights[INPUT_NEURONS * HIDDEN_NEURONS], outputWeights[HIDDEN_NEURONS] __attribute__((aligned(64)));
+    float inputWeightsGradients[INPUT_NEURONS * HIDDEN_NEURONS], outputWeightsGradients[HIDDEN_NEURONS] __attribute__((aligned(64)));
 
-    Gradient inputWeightsGrad[INPUT_NEURONS][HIDDEN_NEURONS], outputWeightsGrad[HIDDEN_NEURONS];
+    Gradient inputWeightsGrad[INPUT_NEURONS * HIDDEN_NEURONS], outputWeightsGrad[HIDDEN_NEURONS];
     Gradient inputBiasesGrad[HIDDEN_NEURONS], outputBiasGrad;
 
     GoodNetInput input_v;
@@ -452,61 +336,48 @@ struct ThreadGradients {
         return x * (1 - x) * SIGMOID_SCALE;
     }
 
-    void backProp(GoodNetInput &input_v, OutputValues &o, float outputWeights[], float& pred, float& target) { /// back propagate and update gradients
+    void backProp(GoodNetInput& input_v, OutputValues& o, float outputWeights[], float& pred, float& target) { /// back propagate and update gradients
         /// for output neuron
         float outputError = 2 * (pred - target) * activationFunctionDerivative(pred, SIGMOID);
 
         /// update gradients
 
-        __m256* v = (__m256*)outputWeightsGradients;
+        /*__m256* v = (__m256*)outputWeightsGradients;
         __m256* w = (__m256*)o.output;
         __m256 error = _mm256_set1_ps(outputError);
 
         for (int i = 0; i < batches; i++)
-            v[i] = _mm256_add_ps(v[i], _mm256_mul_ps(error, w[i]));
+            v[i] = _mm256_add_ps(v[i], _mm256_mul_ps(error, w[i]));*/
+
+        for (int i = 0; i < HIDDEN_NEURONS; i++)
+            outputWeightsGradients[i] += outputError * o.output[i];
 
         outputBiasGradient += outputError;
 
         /// for hidden layers
 
         for (int n = 0; n < HIDDEN_NEURONS; n++) {
-            float error = outputWeights[n] * outputError * activationFunctionDerivative(o.output[n], RELU);
+            error[n] = outputWeights[n] * outputError * activationFunctionDerivative(o.output[n], RELU);
+            inputBiasesGradients[n] += error[n];
+        }
 
-            if (error == 0)
-                continue;
-
-            /// update gradients
-
-            for (int i = 0; i < input_v.nr; i++)
-                inputWeightsGradients[input_v.v[i]][n] += error;
-
-            inputBiasesGradients[n] += error;
+        for (int i = 0; i < input_v.nr; i++) {
+            for (int n = 0; n < HIDDEN_NEURONS; n++) {
+                inputWeightsGradients[input_v.v[i] * HIDDEN_NEURONS + n] += error[n];
+            }
         }
     }
+
 
     int lg = sizeof(__m256) / sizeof(float);
     int batches = HIDDEN_NEURONS / lg;
 
+    float error[HIDDEN_NEURONS];
     float inputBiasesGradients[HIDDEN_NEURONS], outputBiasGradient;
-    float inputWeightsGradients[INPUT_NEURONS][HIDDEN_NEURONS], outputWeightsGradients[HIDDEN_NEURONS] __attribute__((aligned(64)));
+    float inputWeightsGradients[INPUT_NEURONS * HIDDEN_NEURONS], outputWeightsGradients[HIDDEN_NEURONS] __attribute__((aligned(64)));
 };
 
-void sumGradients(Network& NN, Network& nn) {
-    for (int i = 0; i < INPUT_NEURONS; i++) {
-        for (int j = 0; j < HIDDEN_NEURONS; j++)
-            NN.inputWeightsGradients[i][j] += nn.inputWeightsGradients[i][j];
-    }
-
-    for (int i = 0; i < HIDDEN_NEURONS; i++)
-        NN.outputWeightsGradients[i] += nn.outputWeightsGradients[i];
-
-    for (int i = 0; i < HIDDEN_NEURONS; i++)
-        NN.inputBiasesGradients[i] += nn.inputBiasesGradients[i];
-
-    NN.outputBiasGradient += nn.outputBiasGradient;
-}
-
-void trainOnBatch(Network& NN, vector <NetInput>& input, vector <float>& output, int l, int r, int nrThreads) {
+void trainOnBatch(Network& NN, Dataset &dataset, int l, int r, int nrThreads) {
     vector <ThreadGradients> grads(nrThreads);
 
     vector <OutputValues> o(nrThreads);
@@ -516,18 +387,17 @@ void trainOnBatch(Network& NN, vector <NetInput>& input, vector <float>& output,
     for (int i = l; i < r; i++) {
         int th = omp_get_thread_num();
 
-        setInput(input_v[th], input[i]);
+        setInput(input_v[th], dataset.input[i]);
 
         float pred = NN.feedForward(input_v[th], o[th]);
 
-        grads[th].backProp(input_v[th], o[th], NN.outputWeights, pred, output[i]);
+        grads[th].backProp(input_v[th], o[th], NN.outputWeights, pred, dataset.output[i]);
     }
 
 #pragma omp parallel for schedule(auto) num_threads(nrThreads)
-    for (int i = 0; i < INPUT_NEURONS; i++) {
-        for (int j = 0; j < HIDDEN_NEURONS; j++) {
-            for (int t = 0; t < nrThreads; t++)
-                NN.inputWeightsGradients[i][j] += grads[t].inputWeightsGradients[i][j];
+    for (int i = 0; i < INPUT_NEURONS * HIDDEN_NEURONS; i++) {
+        for (int t = 0; t < nrThreads; t++) {
+            NN.inputWeightsGradients[i] += grads[t].inputWeightsGradients[i];
         }
     }
 
@@ -547,7 +417,7 @@ void trainOnBatch(Network& NN, vector <NetInput>& input, vector <float>& output,
         NN.outputBiasGradient += grads[t].outputBiasGradient;
 }
 
-float calcError(Network& NN, vector <NetInput>& input, vector <float>& output, int l, int r) {
+float calcError(Network& NN, Dataset &dataset, int l, int r) {
     float error = 0;
     const int nrThreads = 15;
 
@@ -560,8 +430,8 @@ float calcError(Network& NN, vector <NetInput>& input, vector <float>& output, i
     for (int i = l; i < r; i++) {
         int th = omp_get_thread_num();
 
-        float ans = nets[th].feedForward(input[i]);
-        error += (ans - output[i]) * (ans - output[i]);
+        float ans = nets[th].feedForward(dataset.input[i]);
+        error += (ans - dataset.output[i]) * (ans - dataset.output[i]);
     }
 
     return error / (r - l);
@@ -574,23 +444,17 @@ float calcError(Network& NN, vector <NetInput>& input, vector <float>& output, i
 
 Network NN;
 
-void runTraining(vector <NetInput>& input, vector <float>& output,
-    int dataSize, int batchSize, int epochs, int nrThreads, float split, string loadPath, string savePath,
-    bool load, bool shuffle) {
-
-    assert(input.size() == output.size());
-
+void runTraining(Dataset &dataset, int dataSize, int batchSize, int epochs, int nrThreads, float split, string loadPath, string savePath, bool load, bool shuffle) {
     int trainSize = dataSize * (1.0 - split);
 
     /// shuffle training data (to avoid over fitting)
 
     if (shuffle) {
-        int nrInputs = input.size();
-        cout << nrInputs << " positions\n";
-        for (int i = nrInputs - 1; i >= 0; i--) {
+        cout << dataSize << " positions\n";
+        for (int i = 0; i < dataSize; i++) {
             int nr = tools::integer(tools::gen) % (i + 1);
-            swap(input[i], input[nr]);
-            swap(output[i], output[nr]);
+            swap(dataset.input[i], dataset.input[nr]);
+            swap(dataset.output[i], dataset.output[nr]);
 
             if (i % 10000000 == 0)
                 cout << i << "\n";
@@ -602,7 +466,7 @@ void runTraining(vector <NetInput>& input, vector <float>& output,
     if (load) {
         NN.load(loadPath);
 
-        float validationError = calcError(NN, input, output, trainSize, dataSize), trainError = calcError(NN, input, output, 0, trainSize);
+        float validationError = calcError(NN, dataset, trainSize, dataSize), trainError = calcError(NN, dataset, 0, trainSize);
 
         cout << "Validation error : " << validationError << " ; Training Error : " << trainError << "\n";
 
@@ -617,10 +481,17 @@ void runTraining(vector <NetInput>& input, vector <float>& output,
         float tStart = clock();
 
         for (int i = 0; i < trainSize; i += batchSize) {
+            //float t1 = clock();
             cout << "Batch " << i / batchSize + 1 << "/" << trainSize / batchSize + 1 << " ; " << 1.0 * i / (clock() - tStart) << "positions/s\r";
-            trainOnBatch(NN, input, output, i, min(i + batchSize, trainSize), nrThreads);
+            trainOnBatch(NN, dataset, i, min(i + batchSize, trainSize), nrThreads);
+
+            //float t2 = clock();
 
             NN.updateWeights();
+
+            //float t3 = clock();
+
+            //cout << (t2 - t1) / CLOCKS_PER_SEC << " for training only " << (t3 - t1) / CLOCKS_PER_SEC << " for whole batch\n";
         }
 
         cout << "\n";
@@ -628,7 +499,7 @@ void runTraining(vector <NetInput>& input, vector <float>& output,
         float tEnd = clock();
 
         float testStart = clock();
-        float validationError = calcError(NN, input, output, trainSize, dataSize), trainError = calcError(NN, input, output, 0, trainSize);
+        float validationError = calcError(NN, dataset, trainSize, dataSize), trainError = calcError(NN, dataset, 0, trainSize);
         float testEnd = clock();
 
         cout << "Validation error    : " << validationError << " ; Training Error : " << trainError << "\n";
@@ -640,7 +511,7 @@ void runTraining(vector <NetInput>& input, vector <float>& output,
 
         NN.save(savePath);
 
-        if (epoch % 20 == 0)
-            LR /= 5;
+        /*if (epoch % 1000 == 0)
+            LR /= 5;*/
     }
 }
