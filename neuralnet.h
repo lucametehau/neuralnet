@@ -451,8 +451,10 @@ void runTraining(Dataset &dataset, int dataSize, int batchSize, int epochs, int 
 
     if (shuffle) {
         cout << dataSize << " positions\n";
+        static const int K = (int)1e7;
         for (int i = 0; i < dataSize; i++) {
-            int nr = tools::integer(tools::gen) % (i + 1);
+            uniform_int_distribution <int> poz(max(0, i - K), min(dataSize - 1, i + K));
+            int nr = poz(tools::gen);
             swap(dataset.input[i], dataset.input[nr]);
             swap(dataset.output[i], dataset.output[nr]);
 
