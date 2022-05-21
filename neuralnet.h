@@ -18,13 +18,12 @@
 
 using namespace std;
 
-const int INPUT_NEURONS = 768;
+const int INPUT_NEURONS = 1536;
 const int HIDDEN_NEURONS = 512;
 
 const float BETA1 = 0.9;
 const float BETA2 = 0.999;
 const float SIGMOID_SCALE = 0.00447111749925f;
-//const float LAMBDA = 0.0001;
 const float LR = 0.01f;
 
 const int NO_ACTIV = 0;
@@ -32,11 +31,11 @@ const int SIGMOID = 1;
 const int RELU = 2;
 
 string testPos[5] = {
-  "3k4/8/8/8/8/8/8/2QK4", ///KQvK
-  "3k4/8/8/8/8/8/8/2RK4", ///KRvK
-  "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR", /// startpos
-  "2r3k1/5pp1/r7/Np5P/1P2pP2/3nP2q/3Q4/R2R2K1", /// king safety
-  "8/8/4k3/2B2n2/6K1/5p2/8/5q2" /// something random
+    "3k4/8/8/8/8/8/8/2QK4", ///KQvK
+    "3k4/8/8/8/8/8/8/2RK4", ///KRvK
+    "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR", /// startpos
+    "2r3k1/5pp1/r7/Np5P/1P2pP2/3nP2q/3Q4/R2R2K1", /// king safety
+    "8/8/4k3/2B2n2/6K1/5p2/8/5q2" /// something random
 };
 
 mutex M;
@@ -48,8 +47,8 @@ namespace tools {
 }
 
 struct OutputValues {
-    float output[HIDDEN_NEURONS] __attribute__((aligned(64)));
-} __attribute__((aligned(64)));
+    float output[HIDDEN_NEURONS] __attribute__((aligned(32)));
+} __attribute__((aligned(32)));
 
 class Gradient {
 public:
@@ -120,34 +119,47 @@ public:
         return log(val / (1 - val)) / SIGMOID_SCALE;
     }
 
+    // the below functions are taken from here and are used to compute the dot product
+    // https://stackoverflow.com/questions/6996764/fastest-way-to-do-horizontal-sse-vector-sum-or-other-reduction
+
+    float hsum_ps_sse3(__m128 v) {
+        __m128 shuf = _mm_movehdup_ps(v);
+        __m128 sums = _mm_add_ps(v, shuf);
+        shuf = _mm_movehl_ps(shuf, sums);
+        sums = _mm_add_ss(sums, shuf);
+        return _mm_cvtss_f32(sums);
+    }
+
+    float hsum256_ps_avx(__m256 v) {
+        __m128 vlow = _mm256_castps256_ps128(v);
+        __m128 vhigh = _mm256_extractf128_ps(v, 1);
+        vlow = _mm_add_ps(vlow, vhigh);
+        return hsum_ps_sse3(vlow);
+    }
+
     float feedForward(GoodNetInput &input_v, OutputValues &o) { /// feed forward
 
         memcpy(o.output, inputBiases, sizeof(o.output));
         __m256* v = (__m256*)o.output;
 
         for (int i = 0; i < input_v.nr; i++) {
-            /*__m256* z = (__m256*)inputWeights[input_v.v[i]];
+            __m256* z = (__m256*)(inputWeights + input_v.v[i] * HIDDEN_NEURONS);
 
             for (int j = 0; j < batches; j++)
-                v[j] = _mm256_add_ps(v[j], z[j]);*/
-
-            for (int j = 0; j < HIDDEN_NEURONS; j++)
-                o.output[j] += inputWeights[input_v.v[i] * HIDDEN_NEURONS + j];
+                v[j] = _mm256_add_ps(v[j], z[j]);
         }
 
         float sum = outputBias;
 
         __m256* w = (__m256*)outputWeights;
+        __m256 acc = zero;
 
         for (int i = 0; i < batches; i++) {
             v[i] = _mm256_max_ps(zero, v[i]);
-
-            __m256 tmp = _mm256_mul_ps(v[i], w[i]);
-            float tempRes[8] __attribute__((aligned(16)));
-            _mm256_store_ps(tempRes, tmp);
-
-            sum += tempRes[0] + tempRes[1] + tempRes[2] + tempRes[3] + tempRes[4] + tempRes[5] + tempRes[6] + tempRes[7];
+            acc = _mm256_add_ps(acc, _mm256_mul_ps(v[i], w[i]));
         }
+
+        sum += hsum256_ps_avx(acc);
 
         return activationFunction(sum, SIGMOID);
     }
@@ -159,54 +171,46 @@ public:
         __m256* v = (__m256*)output;
 
         for (int i = 0; i < input_v.nr; i++) {
-            /*__m256* z = (__m256*)inputWeights[input_v.v[i]];
+            __m256* z = (__m256*)(inputWeights + input_v.v[i] * HIDDEN_NEURONS);
 
             for (int j = 0; j < batches; j++)
-                v[j] = _mm256_add_ps(v[j], z[j]);*/
-
-            for (int j = 0; j < HIDDEN_NEURONS; j++)
-                output[j] += inputWeights[input_v.v[i] * HIDDEN_NEURONS + j];
+                v[j] = _mm256_add_ps(v[j], z[j]);
         }
 
         float sum = outputBias;
 
         __m256* w = (__m256*)outputWeights;
+        __m256 acc = _mm256_setzero_ps();
 
         for (int i = 0; i < batches; i++) {
             v[i] = _mm256_max_ps(zero, v[i]);
-
-            __m256 tmp = _mm256_mul_ps(v[i], w[i]);
-            float tempRes[8] __attribute__((aligned(16)));
-            _mm256_store_ps(tempRes, tmp);
-
-            sum += tempRes[0] + tempRes[1] + tempRes[2] + tempRes[3] + tempRes[4] + tempRes[5] + tempRes[6] + tempRes[7];
+            acc = _mm256_add_ps(acc, _mm256_mul_ps(v[i], w[i]));
         }
+
+        sum += hsum256_ps_avx(acc);
 
         return activationFunction(sum, SIGMOID);
     }
 
     void updateWeights() { /// update weights
         const int nrThreads = 8;
-#pragma omp parallel for schedule(auto) num_threads(nrThreads)
+
+#pragma omp parallel for schedule(auto) num_threads(8)
         for (int n = 0; n < INPUT_NEURONS * HIDDEN_NEURONS; n++) {
             inputWeights[n] -= inputWeightsGrad[n].getValue(inputWeightsGradients[n]);
-            inputWeightsGradients[n] = 0;
         }
 
-#pragma omp parallel for schedule(auto) num_threads(nrThreads)
+#pragma omp parallel for schedule(auto) num_threads(8)
         for (int n = 0; n < HIDDEN_NEURONS; n++) {
             inputBiases[n] -= inputBiasesGrad[n].getValue(inputBiasesGradients[n]);
-            inputBiasesGradients[n] = 0;
         }
 
-#pragma omp parallel for schedule(auto) num_threads(nrThreads)
+#pragma omp parallel for schedule(auto) num_threads(8)
         for (int n = 0; n < HIDDEN_NEURONS; n++) {
             outputWeights[n] -= outputWeightsGrad[n].getValue(outputWeightsGradients[n]);
-            outputWeightsGradients[n] = 0;
         }
         
         outputBias -= outputBiasGrad.getValue(outputBiasGradient);
-        outputBiasGradient = 0;
     }
 
     void save(string path) {
@@ -302,11 +306,13 @@ public:
         }
     }
 
-    float output[HIDDEN_NEURONS] __attribute__((aligned(64)));
+    float output[HIDDEN_NEURONS] __attribute__((aligned(32)));
     float inputBiases[HIDDEN_NEURONS], outputBias;
     float inputBiasesGradients[HIDDEN_NEURONS], outputBiasGradient;
-    float inputWeights[INPUT_NEURONS * HIDDEN_NEURONS], outputWeights[HIDDEN_NEURONS] __attribute__((aligned(64)));
-    float inputWeightsGradients[INPUT_NEURONS * HIDDEN_NEURONS], outputWeightsGradients[HIDDEN_NEURONS] __attribute__((aligned(64)));
+    float inputWeights[INPUT_NEURONS * HIDDEN_NEURONS] __attribute__((aligned(32)));
+    float outputWeights[HIDDEN_NEURONS] __attribute__((aligned(32)));
+    float inputWeightsGradients[INPUT_NEURONS * HIDDEN_NEURONS] __attribute__((aligned(32)));
+    float outputWeightsGradients[HIDDEN_NEURONS] __attribute__((aligned(32)));
 
     Gradient inputWeightsGrad[INPUT_NEURONS * HIDDEN_NEURONS], outputWeightsGrad[HIDDEN_NEURONS];
     Gradient inputBiasesGrad[HIDDEN_NEURONS], outputBiasGrad;
@@ -342,29 +348,30 @@ struct ThreadGradients {
 
         /// update gradients
 
-        /*__m256* v = (__m256*)outputWeightsGradients;
+        __m256* v = (__m256*)outputWeightsGradients;
         __m256* w = (__m256*)o.output;
-        __m256 error = _mm256_set1_ps(outputError);
+        __m256 errorval = _mm256_set1_ps(outputError);
+        __m256* errorv = (__m256*)error;
+        __m256* inputBiasesv = (__m256*)inputBiasesGradients;
+        __m256* outputWeightsv = (__m256*)outputWeights;
 
-        for (int i = 0; i < batches; i++)
-            v[i] = _mm256_add_ps(v[i], _mm256_mul_ps(error, w[i]));*/
+        for (int i = 0; i < batches; i++) {
+            v[i] = _mm256_add_ps(v[i], _mm256_mul_ps(w[i], errorval));
 
-        for (int i = 0; i < HIDDEN_NEURONS; i++)
-            outputWeightsGradients[i] += outputError * o.output[i];
+            // for hidden layers
+
+            errorv[i] = _mm256_mul_ps(errorval, _mm256_mul_ps(outputWeightsv[i], _mm256_max_ps(w[i], zero)));
+            inputBiasesv[i] = _mm256_add_ps(inputBiasesv[i], errorv[i]);
+        }
 
         outputBiasGradient += outputError;
 
-        /// for hidden layers
-
-        for (int n = 0; n < HIDDEN_NEURONS; n++) {
-            error[n] = outputWeights[n] * outputError * activationFunctionDerivative(o.output[n], RELU);
-            inputBiasesGradients[n] += error[n];
-        }
 
         for (int i = 0; i < input_v.nr; i++) {
-            for (int n = 0; n < HIDDEN_NEURONS; n++) {
-                inputWeightsGradients[input_v.v[i] * HIDDEN_NEURONS + n] += error[n];
-            }
+            __m256* z = (__m256*)(inputWeightsGradients + input_v.v[i] * HIDDEN_NEURONS);
+
+            for (int j = 0; j < batches; j++)
+                z[j] = _mm256_add_ps(z[j], errorv[j]);
         }
     }
 
@@ -372,9 +379,13 @@ struct ThreadGradients {
     int lg = sizeof(__m256) / sizeof(float);
     int batches = HIDDEN_NEURONS / lg;
 
-    float error[HIDDEN_NEURONS];
-    float inputBiasesGradients[HIDDEN_NEURONS], outputBiasGradient;
-    float inputWeightsGradients[INPUT_NEURONS * HIDDEN_NEURONS], outputWeightsGradients[HIDDEN_NEURONS] __attribute__((aligned(64)));
+    float error[HIDDEN_NEURONS] __attribute__((aligned(32)));
+    float inputBiasesGradients[HIDDEN_NEURONS] __attribute__((aligned(32)));
+    float outputBiasGradient;
+    float inputWeightsGradients[INPUT_NEURONS * HIDDEN_NEURONS] __attribute__((aligned(32)));
+    float outputWeightsGradients[HIDDEN_NEURONS] __attribute__((aligned(32)));
+
+    __m256 zero = _mm256_setzero_ps();
 };
 
 void trainOnBatch(Network& NN, Dataset &dataset, int l, int r, int nrThreads) {

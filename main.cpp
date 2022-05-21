@@ -32,7 +32,7 @@ double calcError(vector <Position> & positions, double K) {
 
 double findBestK(vector <string> paths) {
 
-    NN.load("Clover_323mil_e33_256.nn");
+    NN.load("Clover_3_1_590mil_e32_512_eval.nn");
 
     vector <Position> positions;
     Position pos;
@@ -66,7 +66,7 @@ double findBestK(vector <string> paths) {
             else
                 gameRes = 1;
 
-            vector <uint16_t> input_v;
+            GoodNetInput input_v;
             NetInput inp = fenToInput(fen);
             OutputValues o;
             setInput(input_v, inp);
@@ -119,11 +119,11 @@ double findBestK(vector <string> paths) {
 Dataset dataset;
 
 int main() {
-    /*
-    vector <string> paths;
+    
+    /*vector <string> paths;
 
     for (int i = 0; i < 16; i++) {
-        string path = "C:\\Users\\Luca\\source\\repos\\CloverEngine\\Clover_3_0_data_d9_4_";
+        string path = "C:\\Users\\Luca\\source\\repos\\CloverEngine\\CloverData_3_2_v1_";
         
         if (i > 9)
             path += char(i / 10 + '0'), path += char(i % 10 + '0');
@@ -136,8 +136,8 @@ int main() {
     double K = findBestK(paths);
 
     cout << K << "\n";
-    return 0;
-    */
+    return 0;*/
+    
 
     vector <NetInput> input;
     vector <float> output;
@@ -161,15 +161,17 @@ int main() {
         //chessTraining::readMultipleDatasets(input, output, dataSize, "C:\\Users\\Luca\\source\\repos\\CloverEngine\\CloerData_d9_3_", 16);
         //chessTraining::readMultipleDatasets(input, output, dataSize, "C:\\Users\\Luca\\source\\repos\\CloverEngine\\CloverData_d9_4", 16);
         
-        chessTraining::readMultipleDatasets(dataset, dataSize, "C:\\Users\\Luca\\source\\repos\\CloverEngine\\Clover.3.0_data_d9", 16);
+        //chessTraining::readMultipleDatasets(dataset, dataSize, "C:\\Users\\Luca\\source\\repos\\CloverEngine\\Clover.3.0_data_d9", 16);
         chessTraining::readMultipleDatasets(dataset, dataSize, "C:\\Users\\Luca\\source\\repos\\CloverEngine\\Clover3.0_data_d9_2_", 16);
         chessTraining::readMultipleDatasets(dataset, dataSize, "C:\\Users\\Luca\\source\\repos\\CloverEngine\\Clover3.0_data_d9_3_", 16);
         chessTraining::readMultipleDatasets(dataset, dataSize, "C:\\Users\\Luca\\source\\repos\\CloverEngine\\Clover_3_0_data_d9_4_", 16);
         chessTraining::readMultipleDatasets(dataset, dataSize, "C:\\Users\\Luca\\source\\repos\\CloverEngine\\Clover_3_0_data_d9_5_", 16);
         
         //chessTraining::readMultipleDatasets(input, output, dataSize, "C:\\Users\\Luca\\source\\repos\\CloverEngine\\Clover_3_1_data_d9_", 16);
-        chessTraining::readMultipleDatasets(dataset, dataSize, "C:\\Users\\Luca\\source\\repos\\CloverEngine\\Clover_3_1_d10_", 16); // it's actually depth 9 oops
-        chessTraining::readMultipleDatasets(dataset, dataSize, "C:\\Users\\Luca\\source\\repos\\CloverEngine\\Clover_3_1_d9_v3_", 16); // it's actually depth 9 oops
+        //chessTraining::readMultipleDatasets(dataset, dataSize, "C:\\Users\\Luca\\source\\repos\\CloverEngine\\Clover_3_1_d10_", 16); // it's actually depth 9 oops
+        chessTraining::readMultipleDatasets(dataset, dataSize, "C:\\Users\\Luca\\source\\repos\\CloverEngine\\Clover_3_1_d9_v3_", 16);
+        chessTraining::readMultipleDatasets(dataset, dataSize, "C:\\Users\\Luca\\source\\repos\\CloverEngine\\Clover_3_2_data0_", 16);
+        chessTraining::readMultipleDatasets(dataset, dataSize, "C:\\Users\\Luca\\source\\repos\\CloverEngine\\CloverData_3_2_v1_", 16);
     }
 
     cout << sizeof(Network) << "\n";

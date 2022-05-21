@@ -4,16 +4,27 @@
 using namespace std;
 
 struct NetInput {
+    uint8_t kingSq[2];
     uint64_t pieces[2];
     uint64_t occ;
 
     NetInput() {
         pieces[0] = pieces[1] = occ = 0;
+        kingSq[0] = kingSq[1] = 0;
     }
 
     void setPiece(int ind, int sq, int p) {
         pieces[ind] = (pieces[ind] << 4) | p;
         occ |= (1ULL << sq);
+
+        // sq = 8 * rank + file => file = sq % 8, side = (file >= 4)
+        
+        //assert(((sq & 4) > 0) == (sq % 8 >= 4));
+
+        if (p == 6)
+            kingSq[0] = ((sq & 4) > 0);
+        else if (p == 12)
+            kingSq[1] = ((sq & 4) > 0);
     }
 };
 
@@ -66,9 +77,9 @@ int cod(char c) {
     return 6 * color + val;
 }
 
-int pieceCode(int piece, int sq) {
+int pieceCode(int piece, int sq, int kingSq) {
     //cout << piece << " " << sq << " " << kingCol << " " << int(kingCol) << "\n";
-    return 64 * piece + sq;
+    return 2 * 64 * piece + 64 * kingSq + sq;
 }
 
 
@@ -119,7 +130,7 @@ void setInput(GoodNetInput& input_v, NetInput& input) {
         int p = (temp[bucket] & 15) - 1;
 
 
-        input_v.v[input_v.nr++] = pieceCode(p, sq);
+        input_v.v[input_v.nr++] = pieceCode(p, sq, input.kingSq[p / 8]);
         temp[bucket] >>= 4;
 
         nr++;
