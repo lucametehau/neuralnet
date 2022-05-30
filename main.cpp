@@ -142,8 +142,8 @@ int main() {
     vector <NetInput> input;
     vector <float> output;
 
-    dataset.input = (NetInput*)malloc(sizeof(NetInput) * 600000000);
-    dataset.output = (float*)malloc(sizeof(float) * 600000000);
+    dataset.input = (NetInput*)malloc(sizeof(NetInput) * DATASET_SIZE);
+    dataset.output = (float*)malloc(sizeof(pair <float, int8_t>) * DATASET_SIZE);
 
     table::init();
     //table::init(128);
@@ -156,19 +156,19 @@ int main() {
     {
         //chessTraining::readMultipleDatasets(input, output, dataSize, "C:\\Users\\Luca\\source\\repos\\CloverEngine\\CloverData", 16);
         
-        //chessTraining::readMultipleDatasets(input, output, dataSize, "C:\\Users\\Luca\\source\\repos\\CloverEngine\\CloverData_d9_", 16);
-        //chessTraining::readMultipleDatasets(input, output, dataSize, "C:\\Users\\Luca\\source\\repos\\CloverEngine\\CloverData_d9_2_", 16);
-        //chessTraining::readMultipleDatasets(input, output, dataSize, "C:\\Users\\Luca\\source\\repos\\CloverEngine\\CloerData_d9_3_", 16);
-        //chessTraining::readMultipleDatasets(input, output, dataSize, "C:\\Users\\Luca\\source\\repos\\CloverEngine\\CloverData_d9_4", 16);
+        chessTraining::readMultipleDatasets(dataset, dataSize, "C:\\Users\\Luca\\source\\repos\\CloverEngine\\CloverData_d9_", 16);
+        chessTraining::readMultipleDatasets(dataset, dataSize, "C:\\Users\\Luca\\source\\repos\\CloverEngine\\CloverData_d9_2_", 16);
+        chessTraining::readMultipleDatasets(dataset, dataSize, "C:\\Users\\Luca\\source\\repos\\CloverEngine\\CloerData_d9_3_", 16);
+        chessTraining::readMultipleDatasets(dataset, dataSize, "C:\\Users\\Luca\\source\\repos\\CloverEngine\\CloverData_d9_4", 16);
         
-        //chessTraining::readMultipleDatasets(dataset, dataSize, "C:\\Users\\Luca\\source\\repos\\CloverEngine\\Clover.3.0_data_d9", 16);
+        chessTraining::readMultipleDatasets(dataset, dataSize, "C:\\Users\\Luca\\source\\repos\\CloverEngine\\Clover.3.0_data_d9", 16);
         chessTraining::readMultipleDatasets(dataset, dataSize, "C:\\Users\\Luca\\source\\repos\\CloverEngine\\Clover3.0_data_d9_2_", 16);
         chessTraining::readMultipleDatasets(dataset, dataSize, "C:\\Users\\Luca\\source\\repos\\CloverEngine\\Clover3.0_data_d9_3_", 16);
         chessTraining::readMultipleDatasets(dataset, dataSize, "C:\\Users\\Luca\\source\\repos\\CloverEngine\\Clover_3_0_data_d9_4_", 16);
         chessTraining::readMultipleDatasets(dataset, dataSize, "C:\\Users\\Luca\\source\\repos\\CloverEngine\\Clover_3_0_data_d9_5_", 16);
         
-        //chessTraining::readMultipleDatasets(input, output, dataSize, "C:\\Users\\Luca\\source\\repos\\CloverEngine\\Clover_3_1_data_d9_", 16);
-        //chessTraining::readMultipleDatasets(dataset, dataSize, "C:\\Users\\Luca\\source\\repos\\CloverEngine\\Clover_3_1_d10_", 16); // it's actually depth 9 oops
+        chessTraining::readMultipleDatasets(dataset, dataSize, "C:\\Users\\Luca\\source\\repos\\CloverEngine\\Clover_3_1_data_d9_", 16);
+        chessTraining::readMultipleDatasets(dataset, dataSize, "C:\\Users\\Luca\\source\\repos\\CloverEngine\\Clover_3_1_d10_", 16); // it's actually depth 9 oops
         chessTraining::readMultipleDatasets(dataset, dataSize, "C:\\Users\\Luca\\source\\repos\\CloverEngine\\Clover_3_1_d9_v3_", 16);
         chessTraining::readMultipleDatasets(dataset, dataSize, "C:\\Users\\Luca\\source\\repos\\CloverEngine\\Clover_3_2_data0_", 16);
         chessTraining::readMultipleDatasets(dataset, dataSize, "C:\\Users\\Luca\\source\\repos\\CloverEngine\\CloverData_3_2_v1_", 16);
@@ -177,6 +177,6 @@ int main() {
     cout << sizeof(Network) << "\n";
 
     runTraining(dataset, dataset.nr, batchSize, nrEpochs, nrThreads, split,
-        "b.nn", "a.nn", false, true);
+        "a.nn", "b.nn", false, true);
     return 0;
 }

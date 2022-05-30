@@ -8,6 +8,8 @@
 
 using namespace std;
 
+const int DATASET_SIZE = (int)1e9;
+
 mt19937_64 gen(0xBEEF);
 uniform_int_distribution <uint64_t> rng;
 
@@ -67,14 +69,14 @@ namespace chessTraining {
         string fen, line;
 
         for (int id = 0; id < dataSize && getline(in, line); id++) {
-            if (in.eof()) {
+            if (in.eof() || dataset.nr >= DATASET_SIZE) {
                 //cout << id << "\n";
                 break;
             }
 
             int p = line.find(" "), p2;
 
-            fen = line.substr(0, p);
+            fen = line.substr(0, p + 2);
 
             stm = line[p + 1];
 
@@ -103,17 +105,22 @@ namespace chessTraining {
 
             evalNr *= sign;
 
-            if (stm == 'b')
-                evalNr *= -1;
+            if (stm == 'b') {
+                //evalNr *= -1;
+                gameRes = 1.0 - gameRes;
+            }
 
 
             float eval = 1.0 / (1.0 + exp(-1.0 * evalNr * SIGMOID_SCALE));
-
-            /// use 50% game result, 50% evaluation
-
-            float score = eval * 1.0 + gameRes * 0.0;
+            float score = EVAL * eval + GAME_RES * gameRes;
 
             NetInput inp = fenToInput(fen);
+
+            if (__builtin_popcountll(inp.occ) == 3) {
+                //cout << fen << " " << evalNr << " " << gameRes << '\n';
+            }
+
+            //cout << line << " " << stm << " " << gameRes << " " << eval << "\n";
 
             //uint64_t h = table::hashInput(inp);
 

@@ -3,7 +3,12 @@
 
 using namespace std;
 
+enum {
+    BLACK, WHITE
+};
+
 struct NetInput {
+    bool stm;
     uint8_t kingSq[2];
     uint64_t pieces[2];
     uint64_t occ;
@@ -11,26 +16,24 @@ struct NetInput {
     NetInput() {
         pieces[0] = pieces[1] = occ = 0;
         kingSq[0] = kingSq[1] = 0;
+        stm = 0;
     }
 
     void setPiece(int ind, int sq, int p) {
         pieces[ind] = (pieces[ind] << 4) | p;
         occ |= (1ULL << sq);
 
-        // sq = 8 * rank + file => file = sq % 8, side = (file >= 4)
-        
-        //assert(((sq & 4) > 0) == (sq % 8 >= 4));
-
         if (p == 6)
-            kingSq[0] = ((sq & 4) > 0);
+            kingSq[BLACK] = sq;
         else if (p == 12)
-            kingSq[1] = ((sq & 4) > 0);
+            kingSq[WHITE] = sq;
     }
 };
 
 struct GoodNetInput {
+    bool stm;
     uint8_t nr;
-    uint16_t v[32];
+    uint16_t v[2][32];
 };
 
 struct Dataset {
@@ -40,9 +43,9 @@ struct Dataset {
 };
 
 int cod(char c) {
-    bool color = 0;
+    bool color = BLACK;
     if ('A' <= c && c <= 'Z') {
-        color = 1;
+        color = WHITE;
         c += 32;
     }
 
@@ -77,9 +80,15 @@ int cod(char c) {
     return 6 * color + val;
 }
 
-int pieceCode(int piece, int sq, int kingSq) {
+int pieceCode(int piece, int sq, int kingSq, int side) {
+    if (side == BLACK) {
+        sq ^= 56;
+        kingSq ^= 56;
+        piece = (piece >= 6 ? piece - 6 : piece + 6);
+    }
+    //kingSq = 0;
     //cout << piece << " " << sq << " " << kingCol << " " << int(kingCol) << "\n";
-    return 2 * 64 * piece + 64 * kingSq + sq;
+    return 2 * 64 * piece + 64 * ((kingSq & 4) > 0) + sq;
 }
 
 
@@ -114,6 +123,13 @@ NetInput fenToInput(string& fen) {
         ind++;
     }
 
+    //cout << fen << " ";
+
+    if (fen[ind] == 'w')
+        ans.stm = WHITE;
+    else
+        ans.stm = BLACK;
+    //cout << ans.stm << "\n";
     return ans;
 }
 
@@ -123,6 +139,8 @@ void setInput(GoodNetInput& input_v, NetInput& input) {
     uint64_t temp[2] = { input.pieces[0], input.pieces[1] };
     input_v.nr = 0;
 
+    input_v.stm = input.stm;
+
     while (m) {
         uint64_t lsb = m & -m;
         int sq = __builtin_ctzll(lsb);
@@ -130,7 +148,9 @@ void setInput(GoodNetInput& input_v, NetInput& input) {
         int p = (temp[bucket] & 15) - 1;
 
 
-        input_v.v[input_v.nr++] = pieceCode(p, sq, input.kingSq[p / 8]);
+        input_v.v[WHITE][input_v.nr] = pieceCode(p, sq, input.kingSq[WHITE], WHITE);
+        input_v.v[BLACK][input_v.nr] = pieceCode(p, sq, input.kingSq[BLACK], BLACK);
+        input_v.nr++;
         temp[bucket] >>= 4;
 
         nr++;
