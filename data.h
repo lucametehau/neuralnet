@@ -40,6 +40,22 @@ struct Dataset {
     int nr;
     float* output;
     NetInput* input;
+
+    Dataset() {
+        nr = 0;
+    }
+
+    Dataset(int nrPos) {
+        nr = 0;
+        input = (NetInput*)malloc(sizeof(NetInput) * nrPos);
+        output = (float*)malloc(sizeof(float) * nrPos);
+    }
+
+    void init(int nrPos) {
+        nr = 0;
+        input = (NetInput*)malloc(sizeof(NetInput) * nrPos);
+        output = (float*)malloc(sizeof(float) * nrPos);
+    }
 };
 
 int cod(char c) {

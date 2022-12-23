@@ -8,7 +8,7 @@
 
 using namespace std;
 
-const int DATASET_SIZE = (int)1e9;
+const int DATASET_SIZE = (int)6e8;
 
 mt19937_64 gen(0xBEEF);
 uniform_int_distribution <uint64_t> rng;
@@ -53,17 +53,17 @@ namespace table {
         hashTable[h & (entries - 1)] = h;
         return 0;
     }
-}
+};
 
 namespace chessTraining {
-    int fileInd;
 
-    void readDataset(Dataset &dataset, int dataSize, string path) {
+    int ind = 0;
+    vector <pair <string, int>> datasets;
+
+    void readDataset(Dataset& dataset, int dataSize, string path) {
         ifstream in(path);
 
         int positions = 0;
-
-        fileInd++;
 
         char stm;
         string fen, line;
@@ -116,10 +116,6 @@ namespace chessTraining {
 
             NetInput inp = fenToInput(fen);
 
-            if (__builtin_popcountll(inp.occ) == 3) {
-                //cout << fen << " " << evalNr << " " << gameRes << '\n';
-            }
-
             //cout << line << " " << stm << " " << gameRes << " " << eval << "\n";
 
             //uint64_t h = table::hashInput(inp);
@@ -134,7 +130,29 @@ namespace chessTraining {
         }
     }
 
-    void readMultipleDatasets(Dataset &dataset, int dataSize, string path, int nrFiles) {
+    void addDataset(int dataSize, string path, int nrFiles) {
+        vector <string> paths(nrFiles);
+
+        for (int i = 0; i < nrFiles; i++) {
+            paths[i] = path;
+            if (i < 10)
+                paths[i] += char(i + '0');
+            else
+                paths[i] += char(i / 10 + '0'), paths[i] += char(i % 10 + '0');
+
+            datasets.push_back({ path, dataSize });
+        }
+    }
+
+    void reset() {
+        ind = 0;
+    }
+
+    void readNextEntries(int nr_entries, Dataset& dataset) {
+        dataset.init(nr_entries);
+    }
+
+    void readMultipleDatasets(Dataset& dataset, int dataSize, string path, int nrFiles) {
         vector <string> paths(nrFiles);
 
         //nrThreads = 1;
@@ -160,4 +178,4 @@ namespace chessTraining {
         cout << (clock() - startTime) / CLOCKS_PER_SEC << " seconds for loading "
             << (int)dataset.nr - temp << " files\n";
     }
-}
+};

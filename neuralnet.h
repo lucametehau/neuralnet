@@ -24,7 +24,7 @@ const int HIDDEN_NEURONS = 2 * SIDE_NEURONS;
 
 const float BETA1 = 0.9;
 const float BETA2 = 0.999;
-const float SIGMOID_SCALE = 0.00447111749925f;
+const float SIGMOID_SCALE = 0.0050930381f;
 float LR = 0.01f;
 
 const int NO_ACTIV = 0;
@@ -50,7 +50,7 @@ namespace tools {
     mt19937_64 gen(time(0));
     uniform_int_distribution <int> bin(0, 1);
     uniform_int_distribution <uint64_t> integer;
-}
+};
 
 struct OutputValues {
     float outputstm[SIDE_NEURONS] __attribute__((aligned(32)));
@@ -142,8 +142,25 @@ public:
         return hsum_ps_sse3(vlow);
     }
 
-    float feedForward(GoodNetInput &input_v, OutputValues &o) { /// feed forward
+    void add_vectors(__m256*& a, __m256*& b) {
+        for (int j = 0; j < batches; j += 4) {
+            a[j] = _mm256_add_ps(a[j], b[j]);
+            a[j + 1] = _mm256_add_ps(a[j + 1], b[j + 1]);
+            a[j + 2] = _mm256_add_ps(a[j + 2], b[j + 2]);
+            a[j + 3] = _mm256_add_ps(a[j + 3], b[j + 3]);
+        }
+    }
 
+    void relu_vector(__m256*& a) {
+        for (int j = 0; j < batches; j += 4) {
+            a[j] = _mm256_max_ps(zero, a[j]);
+            a[j + 1] = _mm256_max_ps(zero, a[j + 1]);
+            a[j + 2] = _mm256_max_ps(zero, a[j + 2]);
+            a[j + 3] = _mm256_max_ps(zero, a[j + 3]);
+        }
+    }
+
+    float feedForward(GoodNetInput &input_v, OutputValues &o) { /// feed forward
         memcpy(o.outputstm, inputBiases, sizeof(o.outputstm));
         memcpy(o.outputopstm, inputBiases, sizeof(o.outputopstm));
 
@@ -154,31 +171,40 @@ public:
         for (int i = 0; i < input_v.nr; i++) {
             int n0 = input_v.v[stm][i] * SIDE_NEURONS;
             __m256* w2 = (__m256*) & inputWeights[n0];
-            for (int j = 0; j < batches / 2; j++)
-                vstm[j] = _mm256_add_ps(vstm[j], w2[j]);
+            add_vectors(vstm, w2);
 
             n0 = input_v.v[stm ^ 1][i] * SIDE_NEURONS;
             __m256* w1 = (__m256*) & inputWeights[n0];
-            for (int j = 0; j < batches / 2; j++)
-                vopstm[j] = _mm256_add_ps(vopstm[j], w1[j]);
+            add_vectors(vopstm, w1);
         }
 
         float sum = outputBias;
-
         __m256* w = (__m256*)outputWeights;
-        __m256 acc = _mm256_setzero_ps();
+        __m256 acc0 = _mm256_setzero_ps(), acc1 = _mm256_setzero_ps();
+        __m256 acc2 = _mm256_setzero_ps(), acc3 = _mm256_setzero_ps();
 
-        for (int i = 0; i < batches / 2; i++) {
-            vstm[i] = _mm256_max_ps(zero, vstm[i]);
-            acc = _mm256_add_ps(acc, _mm256_mul_ps(vstm[i], w[i]));
+        relu_vector(vstm);
+        relu_vector(vopstm);
+
+        for (int i = 0; i < batches; i += 4) {
+            acc0 = _mm256_add_ps(acc0, _mm256_mul_ps(vstm[i], w[i]));
+            acc1 = _mm256_add_ps(acc1, _mm256_mul_ps(vstm[i + 1], w[i + 1]));
+            acc2 = _mm256_add_ps(acc2, _mm256_mul_ps(vstm[i + 2], w[i + 2]));
+            acc3 = _mm256_add_ps(acc3, _mm256_mul_ps(vstm[i + 3], w[i + 3]));
         }
 
-        for (int i = 0; i < batches / 2; i++) {
-            vopstm[i] = _mm256_max_ps(zero, vopstm[i]);
-            acc = _mm256_add_ps(acc, _mm256_mul_ps(vopstm[i], w[i + batches / 2]));
+        for (int i = 0; i < batches; i += 4) {
+            acc0 = _mm256_add_ps(acc0, _mm256_mul_ps(vopstm[i], w[i + batches]));
+            acc1 = _mm256_add_ps(acc1, _mm256_mul_ps(vopstm[i + 1], w[i + 1 + batches]));
+            acc2 = _mm256_add_ps(acc2, _mm256_mul_ps(vopstm[i + 2], w[i + 2 + batches]));
+            acc3 = _mm256_add_ps(acc3, _mm256_mul_ps(vopstm[i + 3], w[i + 3 + batches]));
         }
 
-        sum += hsum256_ps_avx(acc);
+        acc0 = _mm256_add_ps(acc0, acc1);
+        acc2 = _mm256_add_ps(acc2, acc3);
+        acc0 = _mm256_add_ps(acc0, acc2);
+
+        sum += hsum256_ps_avx(acc0);
 
         return activationFunction(sum, SIGMOID);
     }
@@ -196,31 +222,41 @@ public:
         for (int i = 0; i < input_v.nr; i++) {
             int n0 = input_v.v[stm][i] * SIDE_NEURONS;
             __m256* w2 = (__m256*) & inputWeights[n0];
-            for (int j = 0; j < batches / 2; j++)
-                vstm[j] = _mm256_add_ps(vstm[j], w2[j]);
+            add_vectors(vstm, w2);
 
             n0 = input_v.v[stm ^ 1][i] * SIDE_NEURONS;
             __m256* w1 = (__m256*) & inputWeights[n0];
-            for (int j = 0; j < batches / 2; j++)
-                vopstm[j] = _mm256_add_ps(vopstm[j], w1[j]);
+            add_vectors(vopstm, w1);
         }
 
         float sum = outputBias;
 
         __m256* w = (__m256*)outputWeights;
-        __m256 acc = _mm256_setzero_ps();
+        __m256 acc0 = _mm256_setzero_ps(), acc1 = _mm256_setzero_ps();
+        __m256 acc2 = _mm256_setzero_ps(), acc3 = _mm256_setzero_ps();
 
-        for (int i = 0; i < batches / 2; i++) {
-            vstm[i] = _mm256_max_ps(zero, vstm[i]);
-            acc = _mm256_add_ps(acc, _mm256_mul_ps(vstm[i], w[i]));
+        relu_vector(vstm);
+        relu_vector(vopstm);
+
+        for (int i = 0; i < batches; i += 4) {
+            acc0 = _mm256_add_ps(acc0, _mm256_mul_ps(vstm[i], w[i]));
+            acc1 = _mm256_add_ps(acc1, _mm256_mul_ps(vstm[i + 1], w[i + 1]));
+            acc2 = _mm256_add_ps(acc2, _mm256_mul_ps(vstm[i + 2], w[i + 2]));
+            acc3 = _mm256_add_ps(acc3, _mm256_mul_ps(vstm[i + 3], w[i + 3]));
         }
 
-        for (int i = 0; i < batches / 2; i++) {
-            vopstm[i] = _mm256_max_ps(zero, vopstm[i]);
-            acc = _mm256_add_ps(acc, _mm256_mul_ps(vopstm[i], w[i + batches / 2]));
+        for (int i = 0; i < batches; i += 4) {
+            acc0 = _mm256_add_ps(acc0, _mm256_mul_ps(vopstm[i], w[i + batches]));
+            acc1 = _mm256_add_ps(acc1, _mm256_mul_ps(vopstm[i + 1], w[i + 1 + batches]));
+            acc2 = _mm256_add_ps(acc2, _mm256_mul_ps(vopstm[i + 2], w[i + 2 + batches]));
+            acc3 = _mm256_add_ps(acc3, _mm256_mul_ps(vopstm[i + 3], w[i + 3 + batches]));
         }
 
-        sum += hsum256_ps_avx(acc);
+        acc0 = _mm256_add_ps(acc0, acc1);
+        acc2 = _mm256_add_ps(acc2, acc3);
+        acc0 = _mm256_add_ps(acc0, acc2);
+
+        sum += hsum256_ps_avx(acc0);
 
         return activationFunction(sum, SIGMOID);
     }
@@ -330,7 +366,7 @@ public:
     GoodNetInput input_v;
 
     int lg = sizeof(__m256) / sizeof(float);
-    int batches = HIDDEN_NEURONS / lg;
+    int batches = SIDE_NEURONS / lg;
 
     __m256 zero = _mm256_setzero_ps();
 };
@@ -353,21 +389,22 @@ struct ThreadGradients {
         return x * (1 - x) * SIGMOID_SCALE;
     }
 
+    void add_vectors(__m256*& a, __m256*& b) {
+        for (int j = 0; j < batches; j += 4) {
+            a[j] = _mm256_add_ps(a[j], b[j]);
+            a[j + 1] = _mm256_add_ps(a[j + 1], b[j + 1]);
+            a[j + 2] = _mm256_add_ps(a[j + 2], b[j + 2]);
+            a[j + 3] = _mm256_add_ps(a[j + 3], b[j + 3]);
+        }
+    }
+
     void backProp(GoodNetInput& input_v, OutputValues& o, float outputWeights[], float& pred, float& target) { /// back propagate and update gradients
         /// for output neuron
         float outputError = 2 * (pred - target) * activationFunctionDerivative(pred, SIGMOID);
-        /// update gradients
         bool stm = input_v.stm;
-
-        for (int i = 0; i < SIDE_NEURONS; i++)
-            outputDerivative[i] = (o.outputstm[i] > 0);
-
-        for (int i = 0; i < SIDE_NEURONS; i++)
-            outputDerivative[i + SIDE_NEURONS] = (o.outputopstm[i] > 0);
 
         __m256* outputvstm = (__m256*)o.outputstm;
         __m256* outputvopstm = (__m256*)o.outputopstm;
-        __m256* outputDv = (__m256*)outputDerivative;
         __m256* inputv = (__m256*)inputBiasesGradients;
         __m256* outputwgv = (__m256*)outputWeightsGradients;
         __m256* outputwv = (__m256*)outputWeights;
@@ -375,41 +412,43 @@ struct ThreadGradients {
         __m256* erroropstm = (__m256*)errorb;
         __m256 ct = _mm256_set1_ps(outputError);
 
-        for (int i = 0; i < batches / 2; i++) {
-            outputwgv[i] = _mm256_add_ps(outputwgv[i], _mm256_mul_ps(ct, outputvstm[i]));
-            errorstm[i] = _mm256_mul_ps(outputwv[i], _mm256_mul_ps(ct, outputDv[i]));
+        for (int i = 0; i < batches; i++) {
+            __m256 val = _mm256_mul_ps(ct, outputvstm[i]);
+            outputwgv[i] = _mm256_add_ps(outputwgv[i], val);
+            errorstm[i] = _mm256_mul_ps(outputwv[i], val); // max(outputvstm[i], zero) not needed as they are already relu'd
         }
 
-        for (int i = 0; i < batches / 2; i++) {
-            outputwgv[i + batches / 2] = _mm256_add_ps(outputwgv[i + batches / 2], _mm256_mul_ps(ct, outputvopstm[i]));
-            erroropstm[i] = _mm256_mul_ps(outputwv[i + batches / 2], _mm256_mul_ps(ct, outputDv[i + batches / 2]));
+        for (int i = 0; i < batches; i++) {
+            __m256 val = _mm256_mul_ps(ct, outputvopstm[i]);
+            outputwgv[i + batches] = _mm256_add_ps(outputwgv[i + batches], val);
+            erroropstm[i] = _mm256_mul_ps(outputwv[i + batches], val); // same as above
         }
 
-        for(int i = 0; i < batches / 2; i++) {
+        for(int i = 0; i < batches; i += 4) {
             inputv[i] = _mm256_add_ps(inputv[i], _mm256_add_ps(errorstm[i], erroropstm[i]));
+            inputv[i + 1] = _mm256_add_ps(inputv[i + 1], _mm256_add_ps(errorstm[i + 1], erroropstm[i + 1]));
+            inputv[i + 2] = _mm256_add_ps(inputv[i + 2], _mm256_add_ps(errorstm[i + 2], erroropstm[i + 2]));
+            inputv[i + 3] = _mm256_add_ps(inputv[i + 3], _mm256_add_ps(errorstm[i + 3], erroropstm[i + 3]));
         }
 
         outputBiasGradient += outputError;
-
 
         for (int i = 0; i < input_v.nr; i++) {
             int n0 = input_v.v[stm][i] * SIDE_NEURONS;
             __m256* v1 = (__m256*) & inputWeightsGradients[n0];
             viz[input_v.v[stm][i]] = 1;
-            for (int j = 0; j < batches / 2; j++)
-                v1[j] = _mm256_add_ps(v1[j], errorstm[j]);
+            add_vectors(v1, errorstm);
 
             n0 = input_v.v[stm ^ 1][i] * SIDE_NEURONS;
             __m256* v2 = (__m256*) & inputWeightsGradients[n0];
             viz[input_v.v[stm ^ 1][i]] = 1;
-            for (int j = 0; j < batches / 2; j++)
-                v2[j] = _mm256_add_ps(v2[j], erroropstm[j]);
+            add_vectors(v2, erroropstm);
         }
     }
 
 
     int lg = sizeof(__m256) / sizeof(float);
-    int batches = HIDDEN_NEURONS / lg;
+    const int batches = SIDE_NEURONS / lg;
 
     float errora[SIDE_NEURONS] __attribute__((aligned(32)));
     float errorb[SIDE_NEURONS] __attribute__((aligned(32)));
@@ -417,29 +456,25 @@ struct ThreadGradients {
     float outputBiasGradient;
     float inputWeightsGradients[INPUT_NEURONS * SIDE_NEURONS] __attribute__((aligned(32)));
     float outputWeightsGradients[HIDDEN_NEURONS] __attribute__((aligned(32)));
-    float outputDerivative[HIDDEN_NEURONS] __attribute__((aligned(32)));
     bool viz[INPUT_NEURONS];
-
-    __m256 zero = _mm256_setzero_ps();
 };
 
 void trainOnBatch(Network& NN, Dataset &dataset, int l, int r, int nrThreads) {
     vector <ThreadGradients> grads(nrThreads);
-
-    vector <OutputValues> o(nrThreads);
-    vector <GoodNetInput> input_v(nrThreads);
 
     bool viz[INPUT_NEURONS];
          
 #pragma omp parallel for schedule(auto) num_threads(nrThreads)
     for (int i = l; i < r; i++) {
         int th = omp_get_thread_num();
+        OutputValues output;
+        GoodNetInput input_v;
 
-        setInput(input_v[th], dataset.input[i]);
+        setInput(input_v, dataset.input[i]);
 
-        float pred = NN.feedForward(input_v[th], o[th]);
+        float pred = NN.feedForward(input_v, output);
 
-        grads[th].backProp(input_v[th], o[th], NN.outputWeights, pred, dataset.output[i]);
+        grads[th].backProp(input_v, output, NN.outputWeights, pred, dataset.output[i]);
     }
 
     for (int i = 0; i < INPUT_NEURONS; i++) {
@@ -559,7 +594,9 @@ void runTraining(Dataset &dataset, int dataSize, int batchSize, int epochs, int 
 
         for (int i = 0; i < trainSize; i += batchSize) {
             //float t1 = clock();
-            cout << "Batch " << i / batchSize + 1 << "/" << trainSize / batchSize + 1 << " ; " << 1.0 * i / (clock() - tStart) * CLOCKS_PER_SEC << "  positions/s\r";
+            cout << "Batch " << i / batchSize + 1 << "/" << trainSize / batchSize + 1 << " ; " 
+                << 1.0 * i / (clock() - tStart) * CLOCKS_PER_SEC << "  positions/s ; " 
+                << (i / batchSize) / (clock() - tStart) * CLOCKS_PER_SEC << "batches/s\r";
             trainOnBatch(NN, dataset, i, min(i + batchSize, trainSize), nrThreads);
 
             //float t2 = clock();
