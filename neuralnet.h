@@ -24,7 +24,7 @@ const int HIDDEN_NEURONS = 2 * SIDE_NEURONS;
 
 const float BETA1 = 0.9;
 const float BETA2 = 0.999;
-const float SIGMOID_SCALE = 0.0050930381f;
+const float SIGMOID_SCALE = 0.00447111749925f;
 float LR = 0.01f;
 
 const int NO_ACTIV = 0;

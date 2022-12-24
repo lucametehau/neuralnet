@@ -21,8 +21,10 @@ double sig(double val, double K) {
 
 double calcError(vector <Position> & positions, double K) {
     double error = 0;
-    for (auto& i : positions) {
-        error += pow(i.res - sig(i.eval, K), 2);
+
+#pragma omp parallel for schedule(auto) num_threads(8) reduction(+ : error)
+    for (int i = 0; i < (int)positions.size(); i++) {
+        error += pow(positions[i].res - sig(positions[i].eval, K), 2);
     }
 
     cout << error << "\n";
@@ -43,7 +45,8 @@ double findBestK(vector <string> paths) {
 
         stream.open(path, ifstream::in);
 
-        assert(stream.is_open());
+        if (!stream.is_open())
+            continue;
 
         string line;
         int nrPos = 0;
@@ -126,7 +129,40 @@ int main() {
         vector <string> paths;
 
         for (int i = 0; i < 16; i++) {
-            string path = "C:\\Users\\Luca\\source\\repos\\CloverEngine\\CloverData_3_3_v1_";
+            string path = "C:\\Users\\Luca\\Desktop\\CloverData\\CloverData_3_3_v1_";
+
+            if (i > 9)
+                path += char(i / 10 + '0'), path += char(i % 10 + '0');
+            else
+                path += char(i + '0');
+
+            path += ".txt";
+            paths.push_back(path);
+        }
+        for (int i = 0; i < 16; i++) {
+            string path = "C:\\Users\\Luca\\Desktop\\CloverData\\CloverData_3_2_v3_";
+
+            if (i > 9)
+                path += char(i / 10 + '0'), path += char(i % 10 + '0');
+            else
+                path += char(i + '0');
+
+            path += ".txt";
+            paths.push_back(path);
+        }
+        for (int i = 0; i < 16; i++) {
+            string path = "C:\\Users\\Luca\\Desktop\\CloverData\\CloverData_3_2_v2_";
+
+            if (i > 9)
+                path += char(i / 10 + '0'), path += char(i % 10 + '0');
+            else
+                path += char(i + '0');
+
+            path += ".txt";
+            paths.push_back(path);
+        }
+        for (int i = 0; i < 16; i++) {
+            string path = "C:\\Users\\Luca\\Desktop\\CloverData\\CloverData_3_2_v1_";
 
             if (i > 9)
                 path += char(i / 10 + '0'), path += char(i % 10 + '0');
@@ -146,13 +182,17 @@ int main() {
     vector <NetInput> input;
     vector <float> output;
 
-    table::init();
     //table::init(128);
 
     int dataSize, batchSize, nrEpochs, nrThreads;
     float split;
 
     cin >> dataSize >> batchSize >> nrEpochs >> nrThreads >> split;
+
+    const string path = "C:\\Users\\Luca\\Desktop\\CloverData\\CloverData.bin";
+    FILE* bin_file = fopen(path.c_str(), "rb");
+
+    chessTraining::readDataset(bin_file, dataset, dataSize);
 
     {
         //chessTraining::readMultipleDatasets(input, output, dataSize, "C:\\Users\\Luca\\source\\repos\\CloverEngine\\CloverData", 16);
@@ -168,14 +208,9 @@ int main() {
         //chessTraining::readMultipleDatasets(dataset, dataSize, "C:\\Users\\Luca\\source\\repos\\CloverEngine\\Clover_3_0_data_d9_4_", 16);
         //chessTraining::readMultipleDatasets(dataset, dataSize, "C:\\Users\\Luca\\source\\repos\\CloverEngine\\Clover_3_0_data_d9_5_", 16);
         
-        chessTraining::readMultipleDatasets(dataset, dataSize, "C:\\Users\\Luca\\source\\repos\\CloverEngine\\Clover_3_1_data_d9_", 16);
-        chessTraining::readMultipleDatasets(dataset, dataSize, "C:\\Users\\Luca\\source\\repos\\CloverEngine\\Clover_3_1_d10_", 16); // it's actually depth 9 oops
-        chessTraining::readMultipleDatasets(dataset, dataSize, "C:\\Users\\Luca\\source\\repos\\CloverEngine\\Clover_3_1_d9_v3_", 16);
-        chessTraining::readMultipleDatasets(dataset, dataSize, "C:\\Users\\Luca\\source\\repos\\CloverEngine\\Clover_3_2_data0_", 16);
-        chessTraining::readMultipleDatasets(dataset, dataSize, "C:\\Users\\Luca\\source\\repos\\CloverEngine\\CloverData_3_2_v1_", 16);
-        chessTraining::readMultipleDatasets(dataset, dataSize, "C:\\Users\\Luca\\source\\repos\\CloverEngine\\CloverData_3_2_v2_", 16);
-        chessTraining::readMultipleDatasets(dataset, dataSize, "C:\\Users\\Luca\\source\\repos\\CloverEngine\\CloverData_3_2_v3_", 16);
-        chessTraining::readMultipleDatasets(dataset, dataSize, "C:\\Users\\Luca\\source\\repos\\CloverEngine\\CloverData_3_3_v1_", 16);
+        //chessTraining::readMultipleDatasets(dataset, dataSize, "C:\\Users\\Luca\\Desktop\\CloverData\\Clover_3_1_data_d9_", 16);
+        //chessTraining::readMultipleDatasets(dataset, dataSize, "C:\\Users\\Luca\\Desktop\\CloverData\\Clover_3_1_d10_", 16); // it's actually depth 9 oops
+        //chessTraining::readMultipleDatasets(dataset, dataSize, "C:\\Users\\Luca\\Desktop\\CloverData\\Clover_3_1_d9_v3_", 16);
     }
 
     cout << sizeof(Network) << "\n";
