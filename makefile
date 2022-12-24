@@ -10,7 +10,7 @@ else
 endif
 
 WFLAGS = -Wall
-RFLAGS = $(WFLAGS) -std=c++17 -O3 -fopenmp
+RFLAGS = $(WFLAGS) -std=c++17 -Ofast -fopenmp
 
 ifeq ($(EXT), .exe)
 	RFLAGS += -static -static-libgcc -static-libstdc++

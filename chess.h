@@ -26,6 +26,8 @@ namespace chessTraining {
             if (!fread(&inp, sizeof(NetInput), 1, bin_file))
                 break;
 
+            
+
             fread(&score, sizeof(float), 1, bin_file);
 
             if (id % 100000 == 0)

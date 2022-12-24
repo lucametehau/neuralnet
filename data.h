@@ -96,6 +96,10 @@ int cod(char c) {
     return 6 * color + val;
 }
 
+int kingInd(int kingSq) {
+    return (kingSq & 4) > 0;
+}
+
 int pieceCode(int piece, int sq, int kingSq, int side) {
     if (side == BLACK) {
         sq ^= 56;
@@ -104,7 +108,7 @@ int pieceCode(int piece, int sq, int kingSq, int side) {
     }
     //kingSq = 0;
     //cout << piece << " " << sq << " " << kingCol << " " << int(kingCol) << "\n";
-    return 2 * 64 * piece + 64 * ((kingSq & 4) > 0) + sq;
+    return 2 * 64 * piece + 64 * kingInd(kingSq) + sq;
 }
 
 
@@ -172,4 +176,7 @@ void setInput(GoodNetInput& input_v, NetInput& input) {
         nr++;
         m ^= lsb;
     }
+
+    //std::sort(input_v.v[WHITE], input_v.v[WHITE] + input_v.nr);
+    //std::sort(input_v.v[BLACK], input_v.v[BLACK] + input_v.nr);
 }
